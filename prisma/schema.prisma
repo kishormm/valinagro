@@ -1,0 +1,97 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["dataProxy"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Admin
+  Franchise
+  Distributor
+  SubDistributor
+  Dealer
+  Farmer
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  userId             String          @unique
+  name               String
+  password           String
+  role               Role
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  uplineId           String?
+  upline             User?           @relation("Hierarchy", fields: [uplineId], references: [id])
+  downline           User[]          @relation("Hierarchy")
+  // --- NEW DETAILED USER FIELDS ---
+  mobile    String?
+  email     String?
+  pan       String?
+  aadhar    String?
+  address   String?
+  pincode   String?
+  crops     String[] @default([]) // Stores a list of selected crops
+  payouts            Payout[]
+  inventory          UserInventory[] // ADDED: Relation to this user's personal inventory
+  transactionsAsSeller Transaction[]   @relation("SellerTransactions")
+  transactionsAsBuyer  Transaction[]   @relation("BuyerTransactions")
+}
+
+model Product {
+  id                  String          @id @default(cuid())
+  name                String          @unique
+  // REMOVED: stock is no longer a global value here.
+  franchisePrice      Float
+  distributorPrice    Float
+  subDistributorPrice Float
+  dealerPrice         Float
+  farmerPrice         Float
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  inventoryItems      UserInventory[] // ADDED: Relation to all inventory items for this product
+  transactions        Transaction[]
+}
+
+// ADDED: The new model to track inventory per user.
+model UserInventory {
+  id        String  @id @default(cuid())
+  quantity  Int
+
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+
+  @@unique([userId, productId]) // Ensures a user has only one inventory entry per product
+}
+
+
+model Transaction {
+  id            String   @id @default(cuid())
+  quantity      Int
+  purchasePrice Float
+  totalAmount   Float
+  profit        Float
+  createdAt     DateTime @default(now())
+  product       Product  @relation(fields: [productId], references: [id])
+  productId     String
+  seller        User     @relation("SellerTransactions", fields: [sellerId], references: [id])
+  sellerId      String
+  buyer         User     @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  buyerId       String
+}
+
+model Payout {
+  id        String   @id @default(cuid())
+  amount    Float
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+}
