@@ -15,8 +15,8 @@ async function main() {
     where: { userId: 'admin' },
     update: {},
     create: {
-      userId: 'admin',
-      name: 'Admin User',
+      userId: 'sachinj',
+      name: 'Sachin Jadhav',
       password: hashedPassword,
       role: 'Admin',
     },
