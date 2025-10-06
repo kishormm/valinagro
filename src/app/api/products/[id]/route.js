@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 export const dynamic = 'force-dynamic';
+
 async function getUserFromToken() {
   const token = cookies().get('token')?.value;
   if (!token) return null;
@@ -15,6 +16,7 @@ async function getUserFromToken() {
   }
 }
 
+// --- COMPLETELY REVISED PUT FUNCTION ---
 export async function PUT(request, { params }) {
   try {
     const userPayload = await getUserFromToken();
@@ -22,20 +24,51 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { id } = params;
-    const { name, franchisePrice, distributorPrice, subDistributorPrice, dealerPrice, farmerPrice } = await request.json();
+    const { id } = params; // This is the productId
+    const { name, stock, franchisePrice, distributorPrice, subDistributorPrice, dealerPrice, farmerPrice } = await request.json();
     
-    const updatedProduct = await prisma.product.update({
-      where: { id },
-      data: { 
-        name, 
-        franchisePrice: parseFloat(franchisePrice), 
-        distributorPrice: parseFloat(distributorPrice), 
-        subDistributorPrice: parseFloat(subDistributorPrice), 
-        dealerPrice: parseFloat(dealerPrice), 
-        farmerPrice: parseFloat(farmerPrice),
-      },
+    const stockQuantity = parseInt(stock, 10);
+    if (isNaN(stockQuantity) || stockQuantity < 0) {
+        return NextResponse.json({ error: 'Invalid stock quantity provided.' }, { status: 400 });
+    }
+
+    // We perform both updates in a transaction to ensure data integrity
+    const updatedProduct = await prisma.$transaction(async (tx) => {
+        // Step 1: Update the product's details (name, prices)
+        const productDetails = await tx.product.update({
+            where: { id },
+            data: { 
+                name, 
+                franchisePrice: parseFloat(franchisePrice), 
+                distributorPrice: parseFloat(distributorPrice), 
+                subDistributorPrice: parseFloat(subDistributorPrice), 
+                dealerPrice: parseFloat(dealerPrice), 
+                farmerPrice: parseFloat(farmerPrice),
+            },
+        });
+
+        // Step 2: Update the Admin's inventory for this product
+        // 'upsert' will update the record if it exists, or create it if it doesn't.
+        await tx.userInventory.upsert({
+            where: {
+                userId_productId: {
+                    userId: userPayload.id, // The logged-in Admin's ID
+                    productId: id,
+                }
+            },
+            update: {
+                quantity: stockQuantity,
+            },
+            create: {
+                userId: userPayload.id,
+                productId: id,
+                quantity: stockQuantity,
+            }
+        });
+
+        return productDetails;
     });
+    
     return NextResponse.json(updatedProduct);
 
   } catch (error) {
@@ -44,6 +77,7 @@ export async function PUT(request, { params }) {
   }
 }
 
+// DELETE function remains the same
 export async function DELETE(request, { params }) {
     const userPayload = await getUserFromToken();
     if (!userPayload || userPayload.role !== 'Admin') {
@@ -74,3 +108,4 @@ export async function DELETE(request, { params }) {
         return NextResponse.json({ error: 'Failed to delete product and its related records' }, { status: 500 });
     }
 }
+
