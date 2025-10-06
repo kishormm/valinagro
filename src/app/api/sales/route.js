@@ -19,7 +19,6 @@ async function getLoggedInUser() {
 
 // GET function (for admin reports)
 export async function GET() {
-  // ... (This function remains unchanged)
   try {
     const loggedInUser = await getLoggedInUser();
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
