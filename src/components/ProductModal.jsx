@@ -19,7 +19,9 @@ export default function ProductModal({ product, onClose, onSave }) {
     if (product) {
       setFormData({
         name: product.name || '',
-        stock: product.stock || '', 
+        // --- THIS IS THE FIX ---
+        // Use 'totalStock' when editing, as this is what the parent component provides.
+        stock: product.totalStock !== undefined ? product.totalStock : '', 
         franchisePrice: product.franchisePrice || '',
         distributorPrice: product.distributorPrice || '',
         subDistributorPrice: product.subDistributorPrice || '',
@@ -27,6 +29,7 @@ export default function ProductModal({ product, onClose, onSave }) {
         farmerPrice: product.farmerPrice || '',
       });
     } else {
+      // For a new product, the form starts empty
       setFormData({ name: '', stock: '', franchisePrice: '', distributorPrice: '', subDistributorPrice: '', dealerPrice: '', farmerPrice: '' });
     }
   }, [product]);
@@ -40,6 +43,7 @@ export default function ProductModal({ product, onClose, onSave }) {
     e.preventDefault();
     setIsSubmitting(true);
     
+    // The data sent to the backend remains the same
     const productData = {
       name: formData.name,
       stock: parseInt(formData.stock, 10), 
@@ -50,9 +54,10 @@ export default function ProductModal({ product, onClose, onSave }) {
       farmerPrice: parseFloat(formData.farmerPrice),
     };
 
+    // Basic validation
     for (const key in productData) {
       const value = productData[key];
-      if ((typeof value === 'number' && isNaN(value)) || (typeof value === 'string' && !value.trim())) {
+      if ((typeof value === 'number' && isNaN(value)) || (typeof value === 'string' && !value.trim() && key === 'name')) {
         toast.error(`Please fill in a valid value for ${key}.`);
         setIsSubmitting(false);
         return;
@@ -75,7 +80,7 @@ export default function ProductModal({ product, onClose, onSave }) {
               <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full p-3 border rounded-md" required />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-2">Initial Stock (Quantity)</label>
+              <label className="block text-gray-700 font-semibold mb-2">{product ? 'Update Master Stock' : 'Initial Stock'}</label>
               <input type="number" name="stock" value={formData.stock} onChange={handleChange} className="w-full p-3 border rounded-md" required />
             </div>
           </div>
@@ -120,4 +125,3 @@ export default function ProductModal({ product, onClose, onSave }) {
     </div>
   );
 }
-
