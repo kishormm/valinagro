@@ -50,7 +50,6 @@ export async function POST(request) {
     const body = await request.json();
     const { productId, quantity } = body;
     
-    // --- THIS IS THE CRITICAL FIX ---
     // We now determine the seller, buyer, and stock holder based on the logged-in user's role.
     let sellerId;
     let buyerId;
