@@ -43,21 +43,13 @@ export default function LandingPage() {
           <a href="#" className="flex items-center">
             <img src="/logo.png" alt="Valine Agro Industries Logo" className="h-12 md:h-14" />
           </a>
-          {/* --- UPDATED: Two separate login buttons --- */}
-          <div className="flex items-center gap-4">
-            <a
-              href="/login/user"
-              className="px-6 py-3 bg-green-700 text-white font-bold rounded-lg hover:bg-green-800 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-            >
-              Member Login
-            </a>
-            <a
-              href="/login/admin"
-              className="px-6 py-3 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-            >
-              Admin Login
-            </a>
-          </div>
+          {/* --- UPDATED: Single Login Button --- */}
+          <a
+            href="/login"
+            className="px-8 py-3 bg-green-700 text-white font-bold rounded-lg hover:bg-green-800 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+          >
+            Login
+          </a>
         </nav>
       </header>
 
@@ -132,21 +124,13 @@ export default function LandingPage() {
                 <p className="text-xl mb-8 max-w-3xl mx-auto shadow-text">
                     Become a part of a forward-thinking community dedicated to bringing the future of sustainable agriculture to farms everywhere.
                 </p>
-                {/* --- UPDATED: Two separate login buttons --- */}
-                <div className="flex flex-col sm:flex-row justify-center items-center gap-6 mt-8">
-                     <a
-                        href="/login/user"
-                        className="inline-block px-12 py-4 bg-white text-green-800 font-bold rounded-lg text-lg hover:bg-gray-200 transition-colors shadow-2xl transform hover:scale-105"
-                    >
-                        Access Member Portal
-                    </a>
-                     <a
-                        href="/login/admin"
-                        className="inline-block px-12 py-4 bg-transparent border-2 border-white text-white font-bold rounded-lg text-lg hover:bg-white hover:text-green-800 transition-colors shadow-2xl transform hover:scale-105"
-                    >
-                        Admin Login
-                    </a>
-                </div>
+                {/* --- UPDATED: Single Login Button --- */}
+                <a
+                    href="/login"
+                    className="inline-block px-12 py-4 bg-white text-green-800 font-bold rounded-lg text-lg hover:bg-gray-200 transition-colors shadow-2xl transform hover:scale-105"
+                >
+                    Access the Portal
+                </a>
             </div>
         </section>
       </main>
@@ -165,9 +149,8 @@ export default function LandingPage() {
                 <ul className="space-y-2">
                     <li><a href="#" className="hover:text-green-400 transition-colors">Home</a></li>
                     <li><a href="#products" className="hover:text-green-400 transition-colors">Our Products</a></li>
-                    {/* --- UPDATED: Footer links point to new pages --- */}
-                    <li><a href="/login/user" className="hover:text-green-400 transition-colors">Member Login</a></li>
-                    <li><a href="/login/admin" className="hover:text-green-400 transition-colors">Admin Login</a></li>
+                    {/* --- UPDATED: Single Login Link --- */}
+                    <li><a href="/login" className="hover:text-green-400 transition-colors">Login</a></li>
                 </ul>
             </div>
             <div>

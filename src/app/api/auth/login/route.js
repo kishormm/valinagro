@@ -3,45 +3,38 @@ import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+
 export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { userId, password, role } = body;
+    const { userId, password } = body;
 
-    if (!userId) {
-        return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    // --- Basic Validation ---
+    if (!userId || !password) {
+        return NextResponse.json({ error: 'User ID and password are required' }, { status: 400 });
     }
 
+    // --- 1. Find the user by their unique User ID ---
     const user = await prisma.user.findUnique({
       where: { userId: userId },
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'Invalid User ID' }, { status: 401 });
+      // Use a generic error message for security
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    // --- NEW LOGIC: Role-based password check ---
+    // --- 2. Securely compare the provided password with the hashed one in the database ---
+    // This works for ALL users, including the Admin.
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
-    // 1. If the user is an Admin, they MUST provide a correct password.
-    if (user.role === 'Admin') {
-      if (!password) {
-        return NextResponse.json({ error: 'Password is required for Admin login' }, { status: 400 });
-      }
-      const isAdminPasswordCorrect = await bcrypt.compare(password, user.password);
-      if (!isAdminPasswordCorrect) {
-        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-      }
-    } 
-    // 2. For all other roles, we only check if the role from the form matches their actual role.
-    // This allows them to log in without a password.
-    else {
-      if (user.role !== role) {
-        return NextResponse.json({ error: `This user is a ${user.role}, not a ${role}.` }, { status: 401 });
-      }
+    if (!isPasswordCorrect) {
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    // --- Token Generation (No changes needed here) ---
+    // --- 3. If credentials are correct, generate and set the auth token ---
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const token = await new SignJWT({
         id: user.id,
@@ -63,6 +56,7 @@ export async function POST(request) {
       path: '/',
     });
 
+    // --- 4. Return the user's data (without the password) so the frontend can redirect ---
     const { password: userPassword, ...userWithoutPassword } = user;
     return NextResponse.json(userWithoutPassword);
 

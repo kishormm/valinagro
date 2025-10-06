@@ -12,17 +12,16 @@ const Loader = () => (
 );
 
 export default function EditUserModal({ user, onClose, onSave }) {
-  // Initialize form state with the user data passed in as a prop
+  // Initialize form state, including the new password field
   const [formData, setFormData] = useState({
     name: '', mobile: '', email: '', pan: '', aadhar: '',
-    address: '', pincode: '', crops: []
+    address: '', pincode: '', crops: [], password: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // List of available crops
   const cropList = ["Cotton", "Soybean", "Sugarcane", "Wheat", "Paddy", "Maize", "Gram", "Groundnut", "Vegetables", "Fruits", "Spices", "Pulses"];
 
-  // When the component mounts or the user prop changes, pre-fill the form
+  // When the modal opens, pre-fill the form with the user's data
   useEffect(() => {
     if (user) {
       setFormData({
@@ -34,6 +33,7 @@ export default function EditUserModal({ user, onClose, onSave }) {
         address: user.address || '',
         pincode: user.pincode || '',
         crops: user.crops || [],
+        password: '' // Always start with an empty password field for security
       });
     }
   }, [user]);
@@ -44,11 +44,7 @@ export default function EditUserModal({ user, onClose, onSave }) {
 
   const handleCropChange = (e) => {
     const { value, checked } = e.target;
-    if (checked) {
-      setFormData(prev => ({ ...prev, crops: [...prev.crops, value] }));
-    } else {
-      setFormData(prev => ({ ...prev, crops: prev.crops.filter(crop => crop !== value) }));
-    }
+    setFormData(prev => ({ ...prev, crops: checked ? [...prev.crops, value] : prev.crops.filter(c => c !== value) }));
   };
 
   const handleSubmit = async (e) => {
@@ -57,12 +53,13 @@ export default function EditUserModal({ user, onClose, onSave }) {
       return toast.error('User name cannot be empty.');
     }
     setIsSubmitting(true);
-    // The onSave function (passed from the parent) will handle the API call
+    // The onSave function (passed from the parent) handles the API call.
+    // It will now send the full formData, including the optional password.
     await onSave(user.id, formData);
     setIsSubmitting(false);
   };
 
-  if (!user) return null; // Don't render the modal if no user is provided
+  if (!user) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
@@ -80,6 +77,20 @@ export default function EditUserModal({ user, onClose, onSave }) {
             <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Full Name" required className="p-3 border rounded-md" />
             <input name="mobile" value={formData.mobile} onChange={handleInputChange} placeholder="Mobile Number" className="p-3 border rounded-md" />
             <input name="email" value={formData.email} type="email" onChange={handleInputChange} placeholder="Email ID" className="p-3 border rounded-md" />
+            
+            {/* --- NEW PASSWORD FIELD --- */}
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">New Password</label>
+              <input 
+                name="password" 
+                type="text"
+                value={formData.password} 
+                onChange={handleInputChange} 
+                placeholder="Leave blank to keep unchanged" 
+                className="p-3 border rounded-md w-full" 
+              />
+            </div>
+
             <input name="pan" value={formData.pan} onChange={handleInputChange} placeholder="PAN Card Number" className="p-3 border rounded-md" />
             <input name="aadhar" value={formData.aadhar} onChange={handleInputChange} placeholder="Aadhar Number" className="p-3 border rounded-md" />
             <input name="pincode" value={formData.pincode} onChange={handleInputChange} placeholder="Pincode" className="p-3 border rounded-md" />
@@ -118,3 +129,4 @@ export default function EditUserModal({ user, onClose, onSave }) {
     </div>
   );
 }
+

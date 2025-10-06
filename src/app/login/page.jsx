@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '../../../store/authStore';
+import { useAuthStore } from '../../store/authStore';
 
 // Simple inline SVG loader
 const Loader = () => (
@@ -12,50 +12,59 @@ const Loader = () => (
     </svg>
 );
 
-export default function AdminLoginPage() {
+export default function UniversalLoginPage() {
     const router = useRouter();
     const login = useAuthStore((state) => state.login);
 
-    const [adminUserId, setAdminUserId] = useState('');
-    const [adminPassword, setAdminPassword] = useState('');
+    const [userId, setUserId] = useState('');
+    const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleAdminLogin = async (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const user = await login({ userId: adminUserId, password: adminPassword });
-            if (user && user.role === 'Admin') {
-                router.push('/dashboard/admin');
+            // The smart API (which we will build in Step 2) will figure out the user's role.
+            const user = await login({ userId, password }); 
+            if (user) {
+                // Redirect to the correct dashboard based on the role returned from the API.
+                const path = `/dashboard/${user.role.toLowerCase()}`;
+                router.push(path);
             }
         } catch (error) {
-            console.error('Admin login failed');
+            console.error('Login failed');
+            // The authStore will show an error toast.
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <main className="flex justify-center items-center min-h-screen font-sans ">
-            <div className="p-10 bg-white/80 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-md border border-gray-200/50">
-                <h1 className="text-3xl font-bold mb-8 text-center text-gray-800">Admin Portal Login</h1>
-                <form onSubmit={handleAdminLogin}>
-                    <div className="relative mb-4">
+        <main className="flex justify-center items-center min-h-screen font-sans bg-fixed bg-center bg-cover" style={{ backgroundImage: "url('/back.jpg')" }}>
+            <div className="p-10 bg-white/90 backdrop-blur-lg rounded-xl shadow-2xl w-full max-w-md border border-gray-200/50">
+                <div className="text-center mb-8">
+                    <img src="/logo.png" alt="Valin Agro Logo" className="h-16 mx-auto mb-4"/>
+                    <h1 className="text-3xl font-bold text-gray-800">Portal Login</h1>
+                </div>
+                <form onSubmit={handleLogin} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-600 mb-2">User ID</label>
                         <input
                             type="text"
-                            placeholder="Admin User ID"
-                            value={adminUserId}
-                            onChange={(e) => setAdminUserId(e.target.value)}
+                            placeholder="Enter your User ID"
+                            value={userId}
+                            onChange={(e) => setUserId(e.target.value)}
                             className="w-full p-3 text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                             required
                         />
                     </div>
-                    <div className="relative mb-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-600 mb-2">Password</label>
                         <input
                             type="password"
-                            placeholder="Password"
-                            value={adminPassword}
-                            onChange={(e) => setAdminPassword(e.target.value)}
+                            placeholder="Enter your password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             className="w-full p-3 text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                             required
                         />
@@ -64,10 +73,8 @@ export default function AdminLoginPage() {
                         {isSubmitting ? <Loader /> : 'Log In'}
                     </button>
                 </form>
-                 <div className="text-center mt-6">
-                    <a href="/login/user" className="text-sm text-green-700 hover:underline">Are you a member? Login here.</a>
-                </div>
             </div>
         </main>
     );
 }
+
