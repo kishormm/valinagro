@@ -24,10 +24,8 @@ export default function UniversalLoginPage() {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            // The smart API (which we will build in Step 2) will figure out the user's role.
             const user = await login({ userId, password }); 
             if (user) {
-                // Redirect to the correct dashboard based on the role returned from the API.
                 const path = `/dashboard/${user.role.toLowerCase()}`;
                 router.push(path);
             }
@@ -40,11 +38,15 @@ export default function UniversalLoginPage() {
     };
 
     return (
-        <main className="flex justify-center items-center min-h-screen font-sans bg-fixed bg-center bg-cover" style={{ backgroundImage: "url('/back.jpg')" }}>
-            <div className="p-10 bg-white/90 backdrop-blur-lg rounded-xl shadow-2xl w-full max-w-md border border-gray-200/50">
+        <main className="flex justify-center items-center min-h-screen font-sans bg-fixed bg-center bg-cover p-4" style={{ backgroundImage: "url('/back.jpg')" }}>
+            {/* --- THIS IS THE KEY CHANGE --- */}
+            {/* Reduced padding on small screens (p-6) and increased it on larger screens (sm:p-10) */}
+            <div className="p-6 sm:p-10 bg-white/90 backdrop-blur-lg rounded-xl shadow-2xl w-full max-w-md border border-gray-200/50">
                 <div className="text-center mb-8">
-                    <img src="/logo.png" alt="Valin Agro Logo" className="h-16 mx-auto mb-4"/>
-                    <h1 className="text-3xl font-bold text-gray-800">Portal Login</h1>
+                    {/* Responsive logo size */}
+                    <img src="/logo.png" alt="Valin Agro Logo" className="h-14 sm:h-16 mx-auto mb-4"/>
+                    {/* Responsive heading size */}
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Portal Login</h1>
                 </div>
                 <form onSubmit={handleLogin} className="space-y-6">
                     <div>
