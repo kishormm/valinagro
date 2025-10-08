@@ -9,11 +9,13 @@ import {
   getPendingPayoutForUser,
   getHierarchy,
   getMasterProductList,
-  getUsersByRole
+  getUsersByRole,
+  changePassword // 1. IMPORT the new changePassword function
 } from '../../../services/apiService';
 import DashboardHeader from '../../../components/DashboardHeader';
 import HierarchyNode from '../../../components/admin/HierarchyNode';
-import UserFormModal from '../../../components/UserFormModal'; // 1. IMPORT the new modal
+import UserFormModal from '../../../components/UserFormModal';
+import ChangePasswordModal from '../../../components/ChangePasswordModal'; // 2. IMPORT the new modal
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -35,7 +37,8 @@ export default function FranchiseDashboard() {
   const [hierarchy, setHierarchy] = useState(null);
   const [analytics, setAnalytics] = useState({ pending: 0, teamSize: 0 });
   const [isLoading, setIsLoading] = useState(true);
-  const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false); // 2. ADD state for the modal
+  const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false); // 3. ADD state for the password modal
 
   // Form states
   const [sellToDistributorProductId, setSellToDistributorProductId] = useState('');
@@ -51,7 +54,6 @@ export default function FranchiseDashboard() {
 
   const fetchData = useCallback(async () => {
     if (user) {
-      // No need to set loading to true here, as it's handled by the initial load
       try {
         const [masterList, downlineData, payoutData, hierarchyData, farmersData] = await Promise.all([
           getMasterProductList(),
@@ -68,14 +70,14 @@ export default function FranchiseDashboard() {
       } catch (error) {
         toast.error("Could not load all dashboard data.");
       } finally {
-        if(isLoading) setIsLoading(false); // Only set loading to false on the first fetch
+        if(isLoading) setIsLoading(false);
       }
     }
-  }, [user, isLoading]); // Dependency on isLoading to manage the initial load state
+  }, [user, isLoading]);
 
   useEffect(() => {
     if (user) fetchData();
-  }, [user]); // Initial fetch when user is available
+  }, [user, fetchData]);
 
   const handleLogout = () => { logout(); router.push('/'); };
   useEffect(() => { if (user && user.role !== 'Franchise') router.push('/'); }, [user, router]);
@@ -108,31 +110,56 @@ export default function FranchiseDashboard() {
     } catch (error) { console.error(error); }
   };
 
+  // 4. ADD a new handler for saving the password
+  const handleSavePassword = async (passwordData) => {
+    try {
+        await changePassword(passwordData);
+        toast.success('Password changed successfully!');
+        setIsChangePasswordModalOpen(false); // Close the modal on success
+    } catch (error) {
+        console.error("Failed to change password:", error);
+        // The error toast is already handled by the apiService
+    }
+  };
+
   if (!user || isLoading) {
     return <Loader />;
   }
 
   return (
     <>
-      {/* 3. RENDER the new modal */}
       <UserFormModal 
         isOpen={isRecruitModalOpen}
         onClose={() => setIsRecruitModalOpen(false)}
-        onUserAdded={fetchData} // Refresh data on success
+        onUserAdded={fetchData}
         uplineId={user.id}
         roleToCreate="Distributor"
       />
+      
+      {/* 5. RENDER the new password modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+        onSave={handleSavePassword}
+      />
 
       <div className="min-h-screen bg-stone-50">
-        <DashboardHeader title="Franchise Dashboard" userName={user.name} onLogout={handleLogout} />
+        {/* 6. PASS the handler to the DashboardHeader */}
+        <DashboardHeader 
+          title="Franchise Dashboard" 
+          userName={user.name} 
+          onLogout={handleLogout} 
+          onChangePassword={() => setIsChangePasswordModalOpen(true)}
+        />
         <main className="container mx-auto p-6 space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payout</h3><p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.pending.toFixed(2)}</p></div>
+            <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payout</h3><p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.pending?.toFixed(2) || '0.00'}</p></div>
             <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Team Size (Distributors)</h3><p className="text-4xl font-bold text-teal-600 mt-2">{analytics.teamSize}</p></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="flex flex-col gap-8">
+              {/* Sell to Distributor Form */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Distributor</h2>
                 <form onSubmit={handleSellToDistributor} className="space-y-4">
@@ -158,6 +185,7 @@ export default function FranchiseDashboard() {
                 </form>
               </div>
               
+              {/* Sell to Farmer Form */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell Directly to Farmer</h2>
                 <form onSubmit={handleSellToFarmer} className="space-y-4">
@@ -183,10 +211,10 @@ export default function FranchiseDashboard() {
                 </form>
               </div>
               
-              {/* 4. REPLACE the old form with a button */}
+              {/* Recruit Distributor Button */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Distributor</h2>
-                <p className="text-gray-600 mb-4">Click the button below to add a new distributor to your downline with all their required details.</p>
+                <p className="text-gray-600 mb-4">Click the button below to add a new distributor to your downline.</p>
                 <button 
                   onClick={() => setIsRecruitModalOpen(true)}
                   className="w-full mt-2 py-3 bg-teal-600 text-white font-bold rounded-md hover:bg-teal-700"
@@ -197,19 +225,14 @@ export default function FranchiseDashboard() {
             </div>
 
             <div className="flex flex-col gap-8">
+              {/* Master Product Inventory Table */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Master Product Inventory</h2>
                 <div className="overflow-x-auto max-h-96">
-                  <table className="w-full text-left">
-                    <thead><tr className="bg-stone-100 text-stone-600 uppercase text-sm sticky top-0"><th className="p-3">Product Name</th><th className="p-3">Total Available Stock</th></tr></thead>
-                    <tbody>
-                      {masterProducts.length > 0 ? masterProducts.map(p => (
-                        <tr key={p.id} className="border-b"><td className="p-3">{p.name}</td><td className="p-3 font-medium">{p.stock} Units</td></tr>
-                      )) : <tr><td colSpan="2" className="p-3 text-center">No products found.</td></tr>}
-                    </tbody>
-                  </table>
+                  <table className="w-full text-left"><thead><tr className="bg-stone-100 text-stone-600 uppercase text-sm sticky top-0"><th className="p-3">Product Name</th><th className="p-3">Total Available Stock</th></tr></thead><tbody>{masterProducts.length > 0 ? masterProducts.map(p => (<tr key={p.id} className="border-b"><td className="p-3">{p.name}</td><td className="p-3 font-medium">{p.stock} Units</td></tr>)) : <tr><td colSpan="2" className="p-3 text-center">No products found.</td></tr>}</tbody></table>
                 </div>
               </div>
+              {/* Hierarchy View */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">My Team Hierarchy</h2>
                  <div className="overflow-y-auto max-h-96 pl-2 border-l-2 border-stone-200">
@@ -218,7 +241,7 @@ export default function FranchiseDashboard() {
                   ) : (
                     <p className="text-gray-500 text-center">No downline hierarchy to display.</p>
                   )}
-                </div>
+                 </div>
               </div>
             </div>
           </div>
@@ -227,4 +250,3 @@ export default function FranchiseDashboard() {
     </>
   );
 }
-

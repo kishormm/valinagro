@@ -9,12 +9,14 @@ import {
   getPendingPayoutForUser,
   getUserInventory,
   getHierarchy,
-  getUsersByRole, // 1. IMPORT to get farmer list
-  addUser
+  getUsersByRole,
+  addUser,
+  changePassword // 1. IMPORT the new changePassword function
 } from '../../../services/apiService';
 import DashboardHeader from '../../../components/DashboardHeader';
 import HierarchyNode from '../../../components/admin/HierarchyNode';
-import UserFormModal from '../../../components/UserFormModal'; // 2. IMPORT the new modal
+import UserFormModal from '../../../components/UserFormModal';
+import ChangePasswordModal from '../../../components/ChangePasswordModal'; // 2. IMPORT the new modal
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -32,11 +34,12 @@ export default function DealerDashboard() {
 
   const [inventory, setInventory] = useState([]);
   const [downline, setDownline] = useState([]);
-  const [allFarmers, setAllFarmers] = useState([]); // 3. ADD state for all farmers
+  const [allFarmers, setAllFarmers] = useState([]);
   const [hierarchy, setHierarchy] = useState(null);
   const [analytics, setAnalytics] = useState({ pending: 0, teamSize: 0 });
   const [isLoading, setIsLoading] = useState(true);
-  const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false); // 4. ADD state for recruit modal
+  const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false); // 3. ADD state for the password modal
 
   // Form states for selling to Farmer
   const [sellProductId, setSellProductId] = useState('');
@@ -48,7 +51,6 @@ export default function DealerDashboard() {
   const fetchData = useCallback(async () => {
     if (user) {
       try {
-        // 5. FETCH the list of all farmers in addition to other data
         const [inventoryData, downlineData, payoutData, hierarchyData, farmersData] = await Promise.all([
           getUserInventory(),
           getDownline(user.userId),
@@ -60,21 +62,18 @@ export default function DealerDashboard() {
         setDownline(downlineData);
         setAnalytics({ pending: payoutData.pendingBalance, teamSize: downlineData.length });
         setHierarchy(hierarchyData);
-        setAllFarmers(farmersData); // 6. SET the farmer list
+        setAllFarmers(farmersData);
       } catch (error) {
         toast.error("Could not load dashboard data.");
       } finally {
-        setIsLoading(false);
+        if(isLoading) setIsLoading(false);
       }
     }
-  }, [user]);
+  }, [user, isLoading]);
 
   useEffect(() => {
-    if(user) {
-        setIsLoading(true);
-        fetchData();
-    }
-  }, [user]);
+    if(user) fetchData();
+  }, [user, fetchData]);
 
   const handleLogout = () => { logout(); router.push('/'); };
   useEffect(() => { if (user && user.role !== 'Dealer') router.push('/'); }, [user, router]);
@@ -91,13 +90,24 @@ export default function DealerDashboard() {
     } catch (error) { console.error(error); }
   };
 
+  // 4. ADD a new handler for saving the password
+  const handleSavePassword = async (passwordData) => {
+    try {
+        await changePassword(passwordData);
+        toast.success('Password changed successfully!');
+        setIsChangePasswordModalOpen(false); // Close the modal on success
+    } catch (error) {
+        console.error("Failed to change password:", error);
+        // The error toast is already handled by the apiService
+    }
+  };
+
   if (!user || isLoading) {
     return <Loader />;
   }
 
   return (
     <>
-      {/* 7. RENDER the new recruit modal */}
       <UserFormModal 
         isOpen={isRecruitModalOpen}
         onClose={() => setIsRecruitModalOpen(false)}
@@ -106,8 +116,21 @@ export default function DealerDashboard() {
         roleToCreate="Farmer"
       />
 
+      {/* 5. RENDER the new password modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+        onSave={handleSavePassword}
+      />
+
       <div className="min-h-screen bg-stone-50">
-        <DashboardHeader title="Dealer Dashboard" userName={user.name} onLogout={handleLogout} />
+        {/* 6. PASS the handler to the DashboardHeader */}
+        <DashboardHeader 
+          title="Dealer Dashboard" 
+          userName={user.name} 
+          onLogout={handleLogout} 
+          onChangePassword={() => setIsChangePasswordModalOpen(true)}
+        />
         <main className="container mx-auto p-6 space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payout</h3><p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.pending?.toFixed(2) || '0.00'}</p></div>
@@ -132,7 +155,6 @@ export default function DealerDashboard() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium">Sell To</label>
-                    {/* 8. UPDATE dropdown to show ALL farmers */}
                     <select value={sellToId} onChange={(e) => setSellToId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
                         <option value="">Select a Farmer</option>
                         {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
@@ -142,7 +164,6 @@ export default function DealerDashboard() {
                 </form>
               </div>
 
-              {/* 9. REPLACE the old recruit form with a button */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Farmer</h2>
                 <p className="text-gray-600 mb-4">Click the button below to add a new farmer to your downline.</p>
@@ -177,7 +198,7 @@ export default function DealerDashboard() {
                   ) : (
                     <p className="text-gray-500 text-center">No downline hierarchy to display.</p>
                   )}
-                </div>
+                 </div>
               </div>
             </div>
           </div>
@@ -186,4 +207,3 @@ export default function DealerDashboard() {
     </>
   );
 }
-

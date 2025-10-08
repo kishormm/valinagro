@@ -9,12 +9,14 @@ import {
   getPendingPayoutForUser,
   getUserInventory,
   getHierarchy,
-  getUsersByRole, // 1. IMPORT to get farmer list
-  addUser
+  getUsersByRole,
+  addUser,
+  changePassword // 1. IMPORT the new changePassword function
 } from '../../../services/apiService';
 import DashboardHeader from '../../../components/DashboardHeader';
 import HierarchyNode from '../../../components/admin/HierarchyNode';
-import UserFormModal from '../../../components/UserFormModal'; // 2. IMPORT the new modal
+import UserFormModal from '../../../components/UserFormModal';
+import ChangePasswordModal from '../../../components/ChangePasswordModal'; // 2. IMPORT the new modal
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -32,18 +34,19 @@ export default function SubDistributorDashboard() {
 
   const [inventory, setInventory] = useState([]);
   const [downline, setDownline] = useState([]);
-  const [allFarmers, setAllFarmers] = useState([]); // 3. ADD state for farmers
+  const [allFarmers, setAllFarmers] = useState([]);
   const [hierarchy, setHierarchy] = useState(null);
   const [analytics, setAnalytics] = useState({ pending: 0, teamSize: 0 });
   const [isLoading, setIsLoading] = useState(true);
-  const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false); // 4. ADD state for recruit modal
+  const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false); // 3. ADD state for the password modal
 
   // Form states for selling to Dealer
   const [sellToDealerProductId, setSellToDealerProductId] = useState('');
   const [sellToDealerQuantity, setSellToDealerQuantity] = useState(1);
   const [sellToDealerId, setSellToDealerId] = useState('');
   
-  // 5. ADD form states for selling to Farmer
+  // Form states for selling to Farmer
   const [sellToFarmerProductId, setSellToFarmerProductId] = useState('');
   const [sellToFarmerQuantity, setSellToFarmerQuantity] = useState(1);
   const [sellToFarmerId, setSellToFarmerId] = useState('');
@@ -54,7 +57,6 @@ export default function SubDistributorDashboard() {
   const fetchData = useCallback(async () => {
     if (user) {
       try {
-        // 6. FETCH the list of all farmers
         const [inventoryData, downlineData, payoutData, hierarchyData, farmersData] = await Promise.all([
           getUserInventory(),
           getDownline(user.userId),
@@ -66,21 +68,18 @@ export default function SubDistributorDashboard() {
         setDownline(downlineData);
         setAnalytics({ pending: payoutData.pendingBalance, teamSize: downlineData.length });
         setHierarchy(hierarchyData);
-        setAllFarmers(farmersData); // 7. SET the farmer list
+        setAllFarmers(farmersData);
       } catch (error) {
         toast.error("Could not load dashboard data.");
       } finally {
-        setIsLoading(false);
+        if(isLoading) setIsLoading(false);
       }
     }
-  }, [user]);
+  }, [user, isLoading]);
 
   useEffect(() => {
-    if(user) {
-        setIsLoading(true);
-        fetchData();
-    }
-  }, [user]);
+    if(user) fetchData();
+  }, [user, fetchData]);
 
   const handleLogout = () => { logout(); router.push('/'); };
   useEffect(() => { if (user && user.role !== 'SubDistributor') router.push('/'); }, [user, router]);
@@ -97,7 +96,6 @@ export default function SubDistributorDashboard() {
     } catch (error) { console.error(error); }
   };
   
-  // 8. ADD a new handler for selling to farmers
   const handleSellToFarmer = async (e) => {
     e.preventDefault();
     if (!sellToFarmerProductId || !sellToFarmerId || sellToFarmerQuantity < 1) return toast.error("Please fill all fields.");
@@ -110,13 +108,24 @@ export default function SubDistributorDashboard() {
     } catch (error) { console.error(error); }
   };
 
+  // 4. ADD a new handler for saving the password
+  const handleSavePassword = async (passwordData) => {
+    try {
+        await changePassword(passwordData);
+        toast.success('Password changed successfully!');
+        setIsChangePasswordModalOpen(false); // Close the modal on success
+    } catch (error) {
+        console.error("Failed to change password:", error);
+        // The error toast is already handled by the apiService
+    }
+  };
+
   if (!user || isLoading) {
     return <Loader />;
   }
 
   return (
     <>
-      {/* 9. RENDER the new modal */}
       <UserFormModal 
         isOpen={isRecruitModalOpen}
         onClose={() => setIsRecruitModalOpen(false)}
@@ -125,8 +134,21 @@ export default function SubDistributorDashboard() {
         roleToCreate="Dealer"
       />
 
+      {/* 5. RENDER the new password modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+        onSave={handleSavePassword}
+      />
+
       <div className="min-h-screen bg-stone-50">
-        <DashboardHeader title="Sub-Distributor Dashboard" userName={user.name} onLogout={handleLogout} />
+        {/* 6. PASS the handler to the DashboardHeader */}
+        <DashboardHeader 
+          title="Sub-Distributor Dashboard" 
+          userName={user.name} 
+          onLogout={handleLogout}
+          onChangePassword={() => setIsChangePasswordModalOpen(true)}
+        />
         <main className="container mx-auto p-6 space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payout</h3><p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.pending?.toFixed(2) || '0.00'}</p></div>
@@ -160,7 +182,6 @@ export default function SubDistributorDashboard() {
                 </form>
               </div>
 
-              {/* 10. ADD the "Sell to Farmer" form card */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell Directly to Farmer</h2>
                 <form onSubmit={handleSellToFarmer} className="space-y-4">
@@ -186,7 +207,6 @@ export default function SubDistributorDashboard() {
                 </form>
               </div>
 
-              {/* 11. REPLACE the old recruit form with a button */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Dealer</h2>
                 <p className="text-gray-600 mb-4">Click the button below to add a new dealer to your downline.</p>
@@ -221,7 +241,7 @@ export default function SubDistributorDashboard() {
                   ) : (
                     <p className="text-gray-500 text-center">No downline hierarchy to display.</p>
                   )}
-                </div>
+                 </div>
               </div>
             </div>
           </div>
@@ -230,4 +250,3 @@ export default function SubDistributorDashboard() {
     </>
   );
 }
-

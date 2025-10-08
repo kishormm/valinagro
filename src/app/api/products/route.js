@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 export const dynamic = 'force-dynamic';
+
 async function getUserFromToken() {
   const token = cookies().get('token')?.value;
   if (!token) return null;
@@ -15,6 +16,7 @@ async function getUserFromToken() {
   }
 }
 
+// GET: This function now only fetches ACTIVE products
 export async function GET(request) {
   try {
     const adminUser = await prisma.user.findFirst({
@@ -25,20 +27,25 @@ export async function GET(request) {
       return NextResponse.json({ error: 'System error: Admin account not found.' }, { status: 500 });
     }
 
-    const [allProducts, adminInventory] = await Promise.all([
-      prisma.product.findMany({ orderBy: { createdAt: 'desc' } }),
+    // --- THIS IS THE KEY CHANGE ---
+    // We now only find products that are marked as active.
+    const [activeProducts, adminInventory] = await Promise.all([
+      prisma.product.findMany({ 
+        where: { isActive: true }, // This filter hides "deleted" products
+        orderBy: { createdAt: 'desc' } 
+      }),
       prisma.userInventory.findMany({
         where: { userId: adminUser.id },
       }),
     ]);
+    // --- END OF CHANGE ---
 
     const adminStockMap = new Map(
       adminInventory.map(item => [item.productId, item.quantity])
     );
 
-    const productsWithAdminStock = allProducts.map(product => ({
+    const productsWithAdminStock = activeProducts.map(product => ({
       ...product,
-    
       totalStock: adminStockMap.get(product.id) || 0,
     }));
 
@@ -50,6 +57,7 @@ export async function GET(request) {
   }
 }
 
+// POST: This function remains unchanged
 export async function POST(request) {
   try {
     const userPayload = await getUserFromToken();
@@ -59,13 +67,8 @@ export async function POST(request) {
 
     const body = await request.json();
     const {
-      name,
-      stock,
-      franchisePrice,
-      distributorPrice,
-      subDistributorPrice,
-      dealerPrice,
-      farmerPrice
+      name, stock, franchisePrice, distributorPrice,
+      subDistributorPrice, dealerPrice, farmerPrice
     } = body;
 
     const stockQuantity = parseInt(stock, 10);
@@ -82,6 +85,7 @@ export async function POST(request) {
           subDistributorPrice: parseFloat(subDistributorPrice),
           dealerPrice: parseFloat(dealerPrice),
           farmerPrice: parseFloat(farmerPrice),
+          // All new products are active by default (from the schema)
         },
       });
 

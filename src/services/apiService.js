@@ -214,3 +214,12 @@ export const getSalesReport = (timePeriod, role) => {
     credentials: 'include'
   }).then(handleResponse);
 };
+
+export const changePassword = (passwordData) => {
+  return fetch('/api/users/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(passwordData),
+    credentials: 'include'
+  }).then(handleResponse);
+};

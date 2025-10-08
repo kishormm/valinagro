@@ -48,9 +48,16 @@ export default function ReportsView() {
         fetchReportData();
     }, [fetchReportData]);
 
+    // --- THIS IS THE KEY CHANGE ---
+    // The calculation for totalUnitsSold is now more specific.
     const summaryStats = useMemo(() => {
+        // Total revenue is calculated from all transactions in the current view.
         const totalRevenue = reportData.reduce((acc, sale) => acc + sale.totalAmount, 0);
-        const totalUnitsSold = reportData.reduce((acc, sale) => acc + sale.quantity, 0);
+
+        // Total units sold is ONLY calculated from sales where the seller is a Franchise.
+        const franchiseSales = reportData.filter(sale => sale.seller?.role === 'Franchise');
+        const totalUnitsSold = franchiseSales.reduce((acc, sale) => acc + sale.quantity, 0);
+        
         return { totalRevenue, totalUnitsSold };
     }, [reportData]);
     
@@ -60,21 +67,18 @@ export default function ReportsView() {
         });
     };
 
-    // --- NEW: Function to handle CSV download ---
     const handleDownloadCsv = () => {
         if (reportData.length === 0) {
             toast.error("There is no data to download.");
             return;
         }
 
-        // 1. Define CSV Headers
         const headers = ["Date", "Product", "Seller", "Seller Role", "Buyer", "Buyer Role", "Quantity", "Total Amount"];
         
-        // 2. Convert report data to CSV rows
         const csvRows = reportData.map(sale => {
             const row = [
                 formatDate(sale.createdAt),
-                `"${sale.product.name}"`, // Wrap in quotes to handle commas in names
+                `"${sale.product.name}"`,
                 `"${sale.seller.name}"`,
                 sale.seller.role,
                 `"${sale.buyer.name}"`,
@@ -85,10 +89,8 @@ export default function ReportsView() {
             return row.join(',');
         });
 
-        // 3. Combine headers and rows
         const csvString = [headers.join(','), ...csvRows].join('\n');
         
-        // 4. Create a Blob and trigger the download
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         if (link.download !== undefined) {
@@ -107,7 +109,6 @@ export default function ReportsView() {
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <div className="flex flex-wrap justify-between items-center mb-4">
                  <h2 className="text-2xl font-semibold text-gray-700">Sales Reports</h2>
-                 {/* --- NEW: Download Button --- */}
                  <button 
                     onClick={handleDownloadCsv}
                     className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 flex items-center gap-2"
@@ -135,7 +136,8 @@ export default function ReportsView() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <StatCard title="Total Revenue" value={`₹${summaryStats.totalRevenue.toLocaleString('en-IN')}`} />
-                <StatCard title="Total Units Sold" value={summaryStats.totalUnitsSold.toLocaleString('en-IN')} />
+                {/* --- UPDATED: The title of the stat card for clarity --- */}
+                <StatCard title="Total Unit Sold" value={summaryStats.totalUnitsSold.toLocaleString('en-IN')} />
             </div>
 
             {isLoading ? (

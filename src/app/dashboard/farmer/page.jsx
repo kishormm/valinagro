@@ -3,8 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../store/authStore';
-import { createSale, getUplineInventory } from '../../../services/apiService'; 
+import { 
+    createSale, 
+    getUplineInventory, 
+    changePassword // 1. IMPORT the new changePassword function
+} from '../../../services/apiService'; 
 import DashboardHeader from '../../../components/DashboardHeader';
+import ChangePasswordModal from '../../../components/ChangePasswordModal'; // 2. IMPORT the new modal
 import toast from 'react-hot-toast';
 
 // Using the self-contained SVG loader for consistency
@@ -22,6 +27,7 @@ export default function FarmerDashboard() {
   
   const [availableProducts, setAvailableProducts] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false); // 3. ADD state for the password modal
 
   const fetchDealerStock = useCallback(async () => {
     if (user) {
@@ -32,18 +38,17 @@ export default function FarmerDashboard() {
           console.error("Failed to fetch dealer's stock:", error);
           toast.error("Could not load products from your dealer.");
         } finally {
-          setIsLoading(false);
+            if (isLoading) setIsLoading(false);
         }
     }
-  }, [user]);
+  }, [user, isLoading]);
 
   useEffect(() => {
     // This ensures data is fetched only once when the user is available
     if (user) {
-        setIsLoading(true);
         fetchDealerStock();
     }
-  }, [user]);
+  }, [user, fetchDealerStock]);
 
   useEffect(() => {
     if (user && user.role !== 'Farmer') {
@@ -76,29 +81,55 @@ export default function FarmerDashboard() {
     }
   };
 
+  // 4. ADD a new handler for saving the password
+  const handleSavePassword = async (passwordData) => {
+    try {
+        await changePassword(passwordData);
+        toast.success('Password changed successfully!');
+        setIsChangePasswordModalOpen(false); // Close the modal on success
+    } catch (error) {
+        console.error("Failed to change password:", error);
+        // The error toast is already handled by the apiService
+    }
+  };
+
   if (!user || isLoading) {
     return <Loader />;
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <DashboardHeader title="Farmer's Store" userName={user.name} onLogout={handleLogout} />
-      
-      <main className="container mx-auto p-6">
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-6">Products From Your Dealer</h2>
-          {availableProducts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {availableProducts.map(item => (
-                <ProductCard key={item.id} item={item} onPurchase={handlePurchase} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-gray-500 py-10">Your assigned dealer currently has no products in stock.</p>
-          )}
+    <>
+        {/* 5. RENDER the new password modal */}
+        <ChangePasswordModal
+            isOpen={isChangePasswordModalOpen}
+            onClose={() => setIsChangePasswordModalOpen(false)}
+            onSave={handleSavePassword}
+        />
+        <div className="min-h-screen bg-stone-50">
+            {/* 6. PASS the handler to the DashboardHeader */}
+            <DashboardHeader 
+                title="Farmer's Store" 
+                userName={user.name} 
+                onLogout={handleLogout} 
+                onChangePassword={() => setIsChangePasswordModalOpen(true)}
+            />
+            
+            <main className="container mx-auto p-6">
+                <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-semibold text-gray-700 mb-6">Products From Your Dealer</h2>
+                {availableProducts.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {availableProducts.map(item => (
+                        <ProductCard key={item.id} item={item} onPurchase={handlePurchase} />
+                    ))}
+                    </div>
+                ) : (
+                    <p className="text-center text-gray-500 py-10">Your assigned dealer currently has no products in stock.</p>
+                )}
+                </div>
+            </main>
         </div>
-      </main>
-    </div>
+    </>
   );
 }
 
@@ -152,4 +183,3 @@ function ProductCard({ item, onPurchase }) {
     </div>
   );
 }
-
