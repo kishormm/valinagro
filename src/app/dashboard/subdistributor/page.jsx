@@ -10,13 +10,16 @@ import {
   getUserInventory,
   getHierarchy,
   getUsersByRole,
-  addUser,
-  changePassword // 1. IMPORT the new changePassword function
+  changePassword,
+  getPayables,
+  getReceivables,
+  payTransaction,
 } from '../../../services/apiService';
 import DashboardHeader from '../../../components/DashboardHeader';
 import HierarchyNode from '../../../components/admin/HierarchyNode';
 import UserFormModal from '../../../components/UserFormModal';
-import ChangePasswordModal from '../../../components/ChangePasswordModal'; // 2. IMPORT the new modal
+import ChangePasswordModal from '../../../components/ChangePasswordModal';
+import UplineProductStore from '../../../components/UplineProductStore';
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -36,10 +39,12 @@ export default function SubDistributorDashboard() {
   const [downline, setDownline] = useState([]);
   const [allFarmers, setAllFarmers] = useState([]);
   const [hierarchy, setHierarchy] = useState(null);
-  const [analytics, setAnalytics] = useState({ pending: 0, teamSize: 0 });
+  const [payables, setPayables] = useState([]);
+  const [receivables, setReceivables] = useState({ transactions: [], total: 0 });
+  const [analytics, setAnalytics] = useState({ teamSize: 0, totalProfit: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false); // 3. ADD state for the password modal
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
   // Form states for selling to Dealer
   const [sellToDealerProductId, setSellToDealerProductId] = useState('');
@@ -54,23 +59,40 @@ export default function SubDistributorDashboard() {
   const selectedProductForDealer = inventory.find(item => item.productId === sellToDealerProductId);
   const selectedProductForFarmer = inventory.find(item => item.productId === sellToFarmerProductId);
 
+  const totalAmountDue = payables.reduce((acc, p) => acc + p.totalAmount, 0);
+
   const fetchData = useCallback(async () => {
     if (user) {
       try {
-        const [inventoryData, downlineData, payoutData, hierarchyData, farmersData] = await Promise.all([
+        const [
+          inventoryData, 
+          downlineData, 
+          hierarchyData, 
+          farmersData, 
+          payablesData, 
+          receivablesData,
+          profitData,
+        ] = await Promise.all([
           getUserInventory(),
           getDownline(user.userId),
-          getPendingPayoutForUser(user.userId),
           getHierarchy(user.userId),
-          getUsersByRole('Farmer')
+          getUsersByRole('Farmer'),
+          getPayables(),
+          getReceivables(),
+          getPendingPayoutForUser(user.userId),
         ]);
         setInventory(inventoryData);
         setDownline(downlineData);
-        setAnalytics({ pending: payoutData.pendingBalance, teamSize: downlineData.length });
+        setAnalytics({ 
+          teamSize: downlineData.length,
+          totalProfit: profitData.totalProfit || 0
+        });
         setHierarchy(hierarchyData);
         setAllFarmers(farmersData);
+        setPayables(payablesData);
+        setReceivables(receivablesData);
       } catch (error) {
-        toast.error("Could not load dashboard data.");
+        toast.error("Could not load all dashboard data.");
       } finally {
         if(isLoading) setIsLoading(false);
       }
@@ -81,8 +103,23 @@ export default function SubDistributorDashboard() {
     if(user) fetchData();
   }, [user, fetchData]);
 
+  const handlePayTransaction = async (transactionId) => {
+    if (window.confirm('Are you sure you want to complete this payment?')) {
+      try {
+        await payTransaction(transactionId);
+        toast.success('Payment successful!');
+        fetchData();
+      } catch (error) {
+        console.error("Payment failed:", error);
+      }
+    }
+  };
+
   const handleLogout = () => { logout(); router.push('/'); };
-  useEffect(() => { if (user && user.role !== 'SubDistributor') router.push('/'); }, [user, router]);
+  
+  useEffect(() => { 
+    if (user && user.role !== 'SubDistributor') router.push('/'); 
+  }, [user, router]);
   
   const handleSellToDealer = async (e) => {
     e.preventDefault();
@@ -108,15 +145,13 @@ export default function SubDistributorDashboard() {
     } catch (error) { console.error(error); }
   };
 
-  // 4. ADD a new handler for saving the password
   const handleSavePassword = async (passwordData) => {
     try {
         await changePassword(passwordData);
         toast.success('Password changed successfully!');
-        setIsChangePasswordModalOpen(false); // Close the modal on success
+        setIsChangePasswordModalOpen(false);
     } catch (error) {
         console.error("Failed to change password:", error);
-        // The error toast is already handled by the apiService
     }
   };
 
@@ -134,7 +169,6 @@ export default function SubDistributorDashboard() {
         roleToCreate="Dealer"
       />
 
-      {/* 5. RENDER the new password modal */}
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
@@ -142,7 +176,6 @@ export default function SubDistributorDashboard() {
       />
 
       <div className="min-h-screen bg-stone-50">
-        {/* 6. PASS the handler to the DashboardHeader */}
         <DashboardHeader 
           title="Sub-Distributor Dashboard" 
           userName={user.name} 
@@ -150,11 +183,100 @@ export default function SubDistributorDashboard() {
           onChangePassword={() => setIsChangePasswordModalOpen(true)}
         />
         <main className="container mx-auto p-6 space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payout</h3><p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.pending?.toFixed(2) || '0.00'}</p></div>
-            <div className="bg-white p-6 rounded-lg shadow-lg text-center"><h3 className="text-stone-500 text-sm font-semibold uppercase">Team Size (Dealers)</h3><p className="text-4xl font-bold text-teal-600 mt-2">{analytics.teamSize}</p></div>
+          {/* Analytics Section */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payouts</h3>
+              <p className="text-4xl font-bold text-red-600 mt-2">₹{receivables.total.toFixed(2)}</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Profit Generated</h3>
+              <p className="text-4xl font-bold text-green-600 mt-2">₹{analytics.totalProfit.toFixed(2)}</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Due</h3>
+              <p className="text-4xl font-bold text-orange-600 mt-2">₹{totalAmountDue.toFixed(2)}</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Team Size</h3>
+              <p className="text-4xl font-bold text-teal-600 mt-2">{analytics.teamSize}</p>
+            </div>
           </div>
 
+          {/* Pending Payments Section (Payables) */}
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Upline</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Product</th>
+                    <th className="p-3">Owed To</th>
+                    <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payables.length > 0 ? payables.map(p => (
+                    <tr key={p.id} className="border-b">
+                      <td className="p-3">{new Date(p.createdAt).toLocaleDateString()}</td>
+                      <td className="p-3 font-medium">{p.product.name} (x{p.quantity})</td>
+                      <td className="p-3">{p.seller.name}</td>
+                      <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => handlePayTransaction(p.id)}
+                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
+                        >
+                          Pay Now
+                        </button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pending Payouts Section (Receivables) */}
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Owed By</th>
+                    <th className="p-3">Product</th>
+                    <th className="p-3 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receivables.transactions.length > 0 ? receivables.transactions.map(t => (
+                    <tr key={t.id} className="border-b">
+                      <td className="p-3">{new Date(t.createdAt).toLocaleDateString()}</td>
+                      <td className="p-3">{t.buyer.name}</td>
+                      <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
+                      <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">No pending payments from your downline.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Purchase Section */}
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Purchase from Upline</h2>
+            <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
+          </div>
+
+          {/* Sell and Inventory Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="flex flex-col gap-8">
               <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -228,7 +350,7 @@ export default function SubDistributorDashboard() {
                         <tbody>
                             {inventory.length > 0 ? inventory.map(item => (
                                 <tr key={item.id} className="border-b"><td className="p-3">{item.product.name}</td><td className="p-3 font-medium">{item.quantity} Units</td></tr>
-                            )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty.</td></tr>}
+                            )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty. Buy from your upline to add stock.</td></tr>}
                         </tbody>
                     </table>
                  </div>

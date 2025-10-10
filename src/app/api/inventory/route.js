@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 export const dynamic = 'force-dynamic';
+
 async function getLoggedInUser() {
   const token = cookies().get('token')?.value;
   if (!token) return null;
@@ -22,40 +23,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-
-    if (loggedInUser.role === 'Franchise') {
-      const allProducts = await prisma.product.findMany();
-      const userInventory = await prisma.userInventory.findMany({
-        where: { userId: loggedInUser.id },
-      });
-
-      const inventoryMap = new Map(
-        userInventory.map(item => [item.productId, item.quantity])
-      );
-
-      const franchiseInventory = allProducts.map(product => ({
-        id: product.id, 
-        productId: product.id,
-        product: product,
-        quantity: inventoryMap.get(product.id) || 0, 
+    // Special handling for Franchise was removed as the logic below is now universal and correct.
+    const inventory = await prisma.userInventory.findMany({
+      where: {
         userId: loggedInUser.id,
-      }));
-
-      return NextResponse.json(franchiseInventory);
-    }
-
-    else {
-      const inventory = await prisma.userInventory.findMany({
-        where: {
-          userId: loggedInUser.id,
-          quantity: { gt: 0 } 
-        },
-        include: {
-          product: true,
-        },
-      });
-      return NextResponse.json(inventory);
-    }
+        quantity: { gt: 0 },
+        // ADDED THIS FILTER to only show your inventory of active products
+        product: {
+          isActive: true,
+        }
+      },
+      include: {
+        product: true,
+      },
+       orderBy: {
+        product: { name: 'asc' }
+      }
+    });
+    
+    return NextResponse.json(inventory);
 
   } catch (error) {
     console.error("Failed to fetch inventory:", error);

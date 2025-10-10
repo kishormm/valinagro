@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPendingPayouts, createPayout } from '@/services/apiService';
+import { getReceivables } from '@/services/apiService';
 import toast from 'react-hot-toast';
 
 const Loader = () => (
@@ -14,7 +14,7 @@ const Loader = () => (
 );
 
 export default function PayoutsView() {
-  const [payouts, setPayouts] = useState([]);
+  const [receivables, setReceivables] = useState({ transactions: [], total: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('All');
 
@@ -29,11 +29,11 @@ export default function PayoutsView() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await getPendingPayouts();
-      setPayouts(data);
+      const data = await getReceivables(); // UPDATED to fetch receivables
+      setReceivables(data);
     } catch (error) {
-      console.error("Failed to fetch pending payouts:", error);
-      toast.error("Could not load payout data.");
+      console.error("Failed to fetch pending receivables:", error);
+      toast.error("Could not load pending payments data.");
     } finally {
       setIsLoading(false);
     }
@@ -43,29 +43,27 @@ export default function PayoutsView() {
     fetchData();
   }, [fetchData]);
 
-  const handlePay = async (userToPay) => {
-    if (window.confirm(`Are you sure you want to pay ₹${userToPay.pendingBalance.toFixed(2)} to ${userToPay.name}?`)) {
-      try {
-        await createPayout({ userId: userToPay.id, amount: userToPay.pendingBalance });
-        toast.success('Payment recorded successfully!');
-        fetchData(); 
-      } catch (error) {
-        console.error("Failed to record payment:", error);
-        toast.error("Failed to record payment.");
-      }
-    }
-  };
-
-  const filteredPayouts = useMemo(() => {
-    if (filter === 'All') return payouts;
-    return payouts.filter(p => p.role === filter);
-  }, [filter, payouts]);
+  const filteredReceivables = useMemo(() => {
+    if (filter === 'All') return receivables.transactions;
+    // UPDATED filter logic to check the buyer's role on the transaction
+    return receivables.transactions.filter(t => t.buyer.role === filter);
+  }, [filter, receivables.transactions]);
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payouts</h2>
+      <div className="flex justify-between items-start mb-4">
+        <div>
+            <h2 className="text-2xl font-semibold text-gray-700">Pending Payments to Admin</h2>
+            <p className="text-sm text-gray-500">List of unpaid transactions from users who bought directly from you.</p>
+        </div>
+        <div className="text-right">
+            <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Receivable</h3>
+            <p className="text-3xl font-bold text-red-600 mt-1">₹{receivables.total.toFixed(2)}</p>
+        </div>
+      </div>
 
-      <div className="flex flex-wrap gap-2 mb-6 border-b pb-4">
+
+      <div className="flex flex-wrap gap-2 mb-6 border-y py-4">
         {roles.map(role => (
           <button
             key={role.value}
@@ -86,34 +84,29 @@ export default function PayoutsView() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
-                <th className="p-3 font-semibold">User Name</th>
+                <th className="p-3 font-semibold">Date</th>
+                <th className="p-3 font-semibold">Owed By</th>
                 <th className="p-3 font-semibold">User ID</th>
                 <th className="p-3 font-semibold">Role</th>
-                <th className="p-3 font-semibold">Pending Amount</th>
-                <th className="p-3 font-semibold">Action</th>
+                <th className="p-3 font-semibold">Product</th>
+                <th className="p-3 font-semibold text-right">Pending Amount</th>
               </tr>
             </thead>
             <tbody>
-              {filteredPayouts.length > 0 ? (
-                filteredPayouts.map((payout) => (
-                  <tr key={payout.id} className="border-b border-stone-200 hover:bg-stone-50">
-                    <td className="p-3 text-gray-800">{payout.name}</td>
-                    <td className="p-3 text-gray-800">{payout.userId}</td>
-                    <td className="p-3 text-gray-800">{payout.role}</td>
-                    <td className="p-3 font-bold text-red-600">₹{payout.pendingBalance.toFixed(2)}</td>
-                    <td className="p-3">
-                      <button
-                        onClick={() => handlePay(payout)}
-                        className="px-4 py-1 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
-                      >
-                        Pay
-                      </button>
-                    </td>
+              {filteredReceivables.length > 0 ? (
+                filteredReceivables.map((transaction) => (
+                  <tr key={transaction.id} className="border-b border-stone-200 hover:bg-stone-50">
+                    <td className="p-3 text-gray-800">{new Date(transaction.createdAt).toLocaleDateString()}</td>
+                    <td className="p-3 text-gray-800 font-medium">{transaction.buyer.name}</td>
+                    <td className="p-3 text-gray-800">{transaction.buyer.userId}</td>
+                    <td className="p-3 text-gray-800">{transaction.buyer.role}</td>
+                    <td className="p-3 text-gray-800">{transaction.product.name} (x{transaction.quantity})</td>
+                    <td className="p-3 font-bold text-red-600 text-right">₹{transaction.totalAmount.toFixed(2)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="p-4 text-center text-gray-500">No pending payouts found for this filter.</td>
+                  <td colSpan="6" className="p-4 text-center text-gray-500">No pending payments found for this filter.</td>
                 </tr>
               )}
             </tbody>
@@ -123,5 +116,3 @@ export default function PayoutsView() {
     </div>
   );
 }
-
-

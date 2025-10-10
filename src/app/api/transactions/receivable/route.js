@@ -22,33 +22,31 @@ export async function GET() {
     if (!loggedInUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    // If the user has no upline (e.g., Admin), return an empty array.
-    if (!loggedInUser.uplineId) {
-        return NextResponse.json([]); 
-    }
 
-    const uplineInventory = await prisma.userInventory.findMany({
+    const receivableTransactions = await prisma.transaction.findMany({
       where: {
-        userId: loggedInUser.uplineId,
-        quantity: { gt: 0 },
-        // ADDED THIS FILTER to only show active products from upline
-        product: {
-          isActive: true,
-        }
+        sellerId: loggedInUser.id,
+        paymentStatus: 'PENDING',
       },
       include: {
-        product: true, 
+        // UPDATED THIS LINE to include userId and role
+        buyer: { select: { name: true, userId: true, role: true } },
+        product: { select: { name: true } },
       },
       orderBy: {
-        product: { name: 'asc' }
-      }
+        createdAt: 'asc',
+      },
     });
 
-    return NextResponse.json(uplineInventory);
+    const totalReceivable = receivableTransactions.reduce((acc, t) => acc + t.totalAmount, 0);
+
+    return NextResponse.json({
+      transactions: receivableTransactions,
+      total: totalReceivable,
+    });
 
   } catch (error) {
-    console.error("Failed to fetch upline inventory:", error);
-    return NextResponse.json({ error: "Failed to fetch dealer's stock." }, { status: 500 });
+    console.error("Failed to fetch receivable transactions:", error);
+    return NextResponse.json({ error: 'Failed to fetch pending payouts.' }, { status: 500 });
   }
 }

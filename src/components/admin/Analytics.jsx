@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSales, getUsers } from '@/services/apiService';
+import { getAdminAnalytics } from '@/services/apiService'; // UPDATED
 import { ThreeDots } from 'react-loader-spinner';
+import toast from 'react-hot-toast';
 
 const StatCard = ({ title, value, colorClass }) => (
   <div className={`p-6 rounded-lg shadow-lg ${colorClass}`}>
@@ -18,22 +19,11 @@ export default function Analytics() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [salesData, usersData] = await Promise.all([
-          getSales(),
-          getUsers(),
-        ]);
-
-        const totalSales = salesData.reduce((acc, sale) => acc + sale.totalAmount, 0);
-        const totalProfit = salesData.reduce((acc, sale) => acc + sale.profit, 0);
-        const activeUsers = usersData.length;
-
-        setStats({
-          totalSalesValue: totalSales,
-          totalProfitValue: totalProfit,
-          activeUsersCount: activeUsers,
-        });
+        const data = await getAdminAnalytics(); // UPDATED to a single, efficient API call
+        setStats(data);
       } catch (err) {
         console.error('Failed to fetch analytics data', err);
+        toast.error("Could not load analytics data.");
       } finally {
         setIsLoading(false);
       }
@@ -44,37 +34,71 @@ export default function Analytics() {
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-semibold text-gray-700 mb-4">
+      <h2 className="text-2xl font-semibold text-gray-700 mb-6">
         Analytics & Overview
       </h2>
       {isLoading ? (
-         <div className="flex justify-center items-center h-48">
-            <ThreeDots color="#166534" height={80} width={80} />
-         </div>
-      ) : !stats || (stats.totalSalesValue === 0 && stats.activeUsersCount === 0) ? (
+        <div className="flex justify-center items-center h-48">
+          <ThreeDots color="#166534" height={80} width={80} />
+        </div>
+      ) : !stats ? (
         <p className="text-center p-6 text-gray-500 bg-gray-100 rounded-lg shadow">
-          No analytics data available yet. Make a sale to see the stats.
+          No analytics data available yet.
         </p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatCard
-            title="Total Sales Value"
-            value={`₹${stats.totalSalesValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            colorClass="bg-blue-200"
-          />
-          <StatCard
-            title="Total Profit Generated"
-            value={`₹${stats.totalProfitValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            colorClass="bg-green-200"
-          />
-          <StatCard
-            title="Active Users"
-            value={stats.activeUsersCount}
-            colorClass="bg-yellow-200"
-          />
+        <div className="space-y-8">
+            {/* Main Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard
+                    title="Total Admin Profit"
+                    value={`₹${stats.totalAdminProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    colorClass="bg-green-200"
+                />
+                <StatCard
+                    title="Total Units Sold by Admin"
+                    value={stats.totalUnitsSold.toLocaleString('en-IN')}
+                    colorClass="bg-blue-200"
+                />
+                <StatCard
+                    title="Total Active Users"
+                    value={stats.activeUsersCount}
+                    colorClass="bg-yellow-200"
+                />
+            </div>
+
+            {/* Profit Breakdown Section */}
+            <div>
+                <h3 className="text-lg font-semibold text-gray-600 mb-4">Profit Breakdown by Role (from Admin Sales)</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    <StatCard
+                        title="from Franchise"
+                        value={`₹${(stats.profitByRole.Franchise || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        colorClass="bg-gray-100"
+                    />
+                    <StatCard
+                        title="from Distributor"
+                        value={`₹${(stats.profitByRole.Distributor || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        colorClass="bg-gray-100"
+                    />
+                     <StatCard
+                        title="from Sub-Distributor"
+                        value={`₹${(stats.profitByRole.SubDistributor || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        colorClass="bg-gray-100"
+                    />
+                     <StatCard
+                        title="from Dealer"
+                        value={`₹${(stats.profitByRole.Dealer || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        colorClass="bg-gray-100"
+                    />
+                     <StatCard
+                        title="from Farmer"
+                        value={`₹${(stats.profitByRole.Farmer || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        colorClass="bg-gray-100"
+                    />
+                </div>
+            </div>
         </div>
       )}
     </div>
   );
 }
-

@@ -10,6 +10,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// NEW ENUM to define payment statuses
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
 enum Role {
   Admin
   Franchise
@@ -20,32 +26,32 @@ enum Role {
 }
 
 model User {
-  id                 String          @id @default(cuid())
-  userId             String          @unique
-  name               String
-  password           String
-  role               Role
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  uplineId           String?
-  upline             User?           @relation("Hierarchy", fields: [uplineId], references: [id])
-  downline           User[]          @relation("Hierarchy")
-  mobile             String?
-  email              String?
-  pan                String?
-  aadhar             String?
-  address            String?
-  pincode            String?
-  crops              String[]        @default([])
-  payouts            Payout[]
-  inventory          UserInventory[]
-  transactionsAsSeller Transaction[]   @relation("SellerTransactions")
-  transactionsAsBuyer  Transaction[]   @relation("BuyerTransactions")
+  id                   String        @id @default(cuid())
+  userId               String        @unique
+  name                 String
+  password             String
+  role                 Role
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  uplineId             String?
+  upline               User?         @relation("Hierarchy", fields: [uplineId], references: [id])
+  downline             User[]        @relation("Hierarchy")
+  mobile               String?
+  email                String?
+  pan                  String?
+  aadhar               String?
+  address              String?
+  pincode              String?
+  crops                String[]      @default([])
+  payouts              Payout[]
+  inventory            UserInventory[]
+  transactionsAsSeller Transaction[] @relation("SellerTransactions")
+  transactionsAsBuyer  Transaction[] @relation("BuyerTransactions")
 }
 
 model Product {
   id                  String          @id @default(cuid())
-  name                String          
+  name                String
   franchisePrice      Float
   distributorPrice    Float
   subDistributorPrice Float
@@ -53,11 +59,7 @@ model Product {
   farmerPrice         Float
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
-  
-  // --- THIS IS THE KEY CHANGE ---
-  // This field will be used to "soft delete" (archive) products.
   isActive            Boolean         @default(true)
-
   inventoryItems      UserInventory[]
   transactions        Transaction[]
 }
@@ -69,6 +71,7 @@ model UserInventory {
   userId    String
   product   Product @relation(fields: [productId], references: [id])
   productId String
+
   @@unique([userId, productId])
 }
 
@@ -85,6 +88,9 @@ model Transaction {
   sellerId      String
   buyer         User     @relation("BuyerTransactions", fields: [buyerId], references: [id])
   buyerId       String
+
+  // NEW FIELD to track if the transaction has been paid
+  paymentStatus PaymentStatus @default(PENDING)
 }
 
 model Payout {
@@ -94,4 +100,3 @@ model Payout {
   user      User     @relation(fields: [userId], references: [id])
   userId    String
 }
-

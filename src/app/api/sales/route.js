@@ -39,7 +39,7 @@ export async function GET() {
   }
 }
 
-// POST function (for creating sales) - COMPLETELY REVISED LOGIC
+// POST function (for creating sales) - REVISED LOGIC
 export async function POST(request) {
   try {
     const loggedInUser = await getLoggedInUser();
@@ -50,13 +50,12 @@ export async function POST(request) {
     const body = await request.json();
     const { productId, quantity } = body;
     
-    // We now determine the seller, buyer, and stock holder based on the logged-in user's role.
     let sellerId;
     let buyerId;
-    let stockHolderId; // The user whose inventory we check and decrement
+    let stockHolderId;
 
     if (loggedInUser.role === 'Farmer') {
-      // If a Farmer is buying, the seller is their upline.
+      // If a Farmer is "creating a sale", they are actually buying from their upline.
       if (!loggedInUser.uplineId) {
         return NextResponse.json({ error: 'Your account is not assigned to a dealer.' }, { status: 400 });
       }
@@ -64,29 +63,19 @@ export async function POST(request) {
       buyerId = loggedInUser.id;
       stockHolderId = sellerId; // We check the dealer's stock
     } 
-    else if (loggedInUser.role === 'Franchise') {
-      // If a Franchise is selling, the stock comes from the Admin.
-      const adminUser = await prisma.user.findFirst({ where: { role: 'Admin' } });
-      if (!adminUser) {
-        return NextResponse.json({ error: 'System configuration error: Admin account not found.' }, { status: 500 });
-      }
-      sellerId = loggedInUser.id; // The Franchise is the seller on record
-      buyerId = body.buyerId;     // The buyer is specified in the form
-      stockHolderId = adminUser.id; // We check the Admin's stock
-    }
+    // --- THIS IS THE CORRECTED LOGIC ---
+    // All roles other than Farmer sell from their OWN stock.
     else {
-      // For all other roles (Distributor, Dealer, etc.), they sell from their own stock.
       sellerId = loggedInUser.id;
       buyerId = body.buyerId;
-      stockHolderId = sellerId; // We check their own stock
+      stockHolderId = sellerId; // Franchise, Distributor, etc. check their OWN stock
     }
-    // --- END OF FIX ---
+    // --- END OF CORRECTION ---
 
     if (!buyerId) {
         return NextResponse.json({ error: 'Buyer could not be identified for this transaction.' }, { status: 400 });
     }
 
-    // Fetch all necessary records in parallel
     const [seller, buyer, product, stockHolderInventory] = await Promise.all([
       prisma.user.findUnique({ where: { id: sellerId } }),
       prisma.user.findUnique({ where: { id: buyerId } }),
@@ -103,7 +92,7 @@ export async function POST(request) {
       return NextResponse.json({ error: `The seller has insufficient stock for ${product.name}.` }, { status: 400 });
     }
 
-    // --- Price and Profit Calculation ---
+    // --- Price and Profit Calculation (Unchanged) ---
     let purchasePrice;
     let costPrice;
 
@@ -127,8 +116,7 @@ export async function POST(request) {
     }
 
     const totalAmount = purchasePrice * quantity;
-    // For a Farmer purchase, the profit calculation uses the actual seller (the Dealer), not the logged-in user.
-    const profit = (purchasePrice - (seller.role === 'Dealer' ? product.dealerPrice : costPrice)) * quantity;
+    const profit = (purchasePrice - costPrice) * quantity;
 
     // --- Database Transaction ---
     const newTransaction = await prisma.$transaction(async (tx) => {
@@ -146,7 +134,16 @@ export async function POST(request) {
       }
 
       const transaction = await tx.transaction.create({
-        data: { sellerId, buyerId, productId, quantity, purchasePrice, totalAmount, profit },
+        data: { 
+            sellerId, 
+            buyerId, 
+            productId, 
+            quantity, 
+            purchasePrice, 
+            totalAmount, 
+            profit,
+            paymentStatus: 'PENDING'
+        },
       });
 
       return transaction;
@@ -159,4 +156,3 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Transaction failed.' }, { status: 500 });
   }
 }
-

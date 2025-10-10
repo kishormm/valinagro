@@ -2,8 +2,9 @@ import prisma from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
-import { Role } from '@prisma/client'; // Import the Role enum from Prisma
+import { Role } from '@prisma/client'; // Keep this import
 export const dynamic = 'force-dynamic';
+
 // Helper function to get the logged-in user
 async function getLoggedInUser() {
   const token = cookies().get('token')?.value;
@@ -17,13 +18,6 @@ async function getLoggedInUser() {
   }
 }
 
-/**
- * A dynamic endpoint to fetch sales reports.
- * It can be filtered by time period and user role.
- * @param {URLSearchParams} request.nextUrl.searchParams
- * @param {string} [request.nextUrl.searchParams.timePeriod] - 'monthly' or 'halfYearly'
- * @param {string} [request.nextUrl.searchParams.role] - e.g., 'Franchise', 'Distributor'
- */
 export async function GET(request) {
   try {
     const loggedInUser = await getLoggedInUser();
@@ -34,39 +28,55 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const timePeriod = searchParams.get('timePeriod');
     const role = searchParams.get('role');
+    const startDate = searchParams.get('startDate'); // NEW
+    const endDate = searchParams.get('endDate');     // NEW
 
-    // --- Build the dynamic query based on the filters provided ---
     const whereClause = {};
 
-    // 1. Handle the time period filter
+    // --- DATE FILTER LOGIC ---
+    let dateFilter = {};
     if (timePeriod) {
-      const now = new Date();
-      if (timePeriod === 'monthly') {
-        // Get records from the last month
-        now.setMonth(now.getMonth() - 1);
-        whereClause.createdAt = { gte: now };
-      } else if (timePeriod === 'halfYearly') {
-        // Get records from the last 6 months
-        now.setMonth(now.getMonth() - 6);
-        whereClause.createdAt = { gte: now };
-      }
+        const now = new Date();
+        if (timePeriod === 'monthly') {
+            now.setMonth(now.getMonth() - 1);
+            dateFilter.gte = now;
+        } else if (timePeriod === 'halfYearly') {
+            now.setMonth(now.getMonth() - 6);
+            dateFilter.gte = now;
+        }
     }
 
-    // 2. Handle the user role filter
-    if (role && role !== 'All' && Object.values(Role).includes(role)) {
-        // Filter by the role of the seller
-        whereClause.seller = {
-            role: role,
+    // NEW: If a custom date range is provided, it overrides the timePeriod tabs
+    if (startDate && endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999); // Ensures the entire end day is included
+        dateFilter = {
+            gte: new Date(startDate),
+            lte: endOfDay,
         };
     }
 
-    // 3. Fetch the transaction data using the constructed 'where' clause
+    // Add the constructed date filter to the main where clause if it's not empty
+    if (Object.keys(dateFilter).length > 0) {
+        whereClause.createdAt = dateFilter;
+    }
+    // --- END OF DATE FILTER LOGIC ---
+
+
+    // Handle the user role filter
+    if (role && role !== 'All' && Object.values(Role).includes(role)) {
+      // This filter now correctly checks if the role matches EITHER the seller OR the buyer
+      whereClause.OR = [
+        { seller: { role: role } },
+        { buyer: { role: role } }
+      ];
+    }
+
     const salesReport = await prisma.transaction.findMany({
       where: whereClause,
       orderBy: {
         createdAt: 'desc',
       },
-      // Include related data to make the report informative
       include: {
         product: { select: { name: true } },
         seller: { select: { name: true, role: true } },
@@ -81,4 +91,3 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Failed to generate sales report.' }, { status: 500 });
   }
 }
-

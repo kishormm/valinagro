@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getSalesReport } from '../../services/apiService';
 import toast from 'react-hot-toast';
 
@@ -14,53 +14,47 @@ const Loader = () => (
     </div>
 );
 
-// Stat Card for Summary Data
-const StatCard = ({ title, value }) => (
-    <div className="bg-white p-4 rounded-lg shadow-md text-center">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase">{title}</h3>
-        <p className="text-3xl font-bold text-gray-800 mt-2">{value}</p>
-    </div>
-);
-
 export default function ReportsView() {
     const [reportData, setReportData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     
+    // FILTERS STATE
     const [activeTab, setActiveTab] = useState('total');
     const [roleFilter, setRoleFilter] = useState('All');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
-    const roles = ['All', 'Franchise', 'Distributor', 'SubDistributor', 'Dealer'];
+    const roles = ['All', 'Admin', 'Franchise', 'Distributor', 'SubDistributor', 'Dealer', 'Farmer'];
 
     const fetchReportData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const timePeriod = activeTab === 'total' ? null : activeTab;
-            const data = await getSalesReport(timePeriod, roleFilter);
+            const timePeriod = (startDate && endDate) ? null : (activeTab === 'total' ? null : activeTab);
+            const data = await getSalesReport(timePeriod, roleFilter, startDate, endDate);
             setReportData(data);
         } catch (error) {
             toast.error("Could not load report data.");
         } finally {
             setIsLoading(false);
         }
-    }, [activeTab, roleFilter]);
+    }, [activeTab, roleFilter, startDate, endDate]);
 
     useEffect(() => {
         fetchReportData();
     }, [fetchReportData]);
 
-    // --- THIS IS THE KEY CHANGE ---
-    // The calculation for totalUnitsSold is now more specific.
-    const summaryStats = useMemo(() => {
-        // Total revenue is calculated from all transactions in the current view.
-        const totalRevenue = reportData.reduce((acc, sale) => acc + sale.totalAmount, 0);
+    const handleTabClick = (tab) => {
+        setStartDate('');
+        setEndDate('');
+        setActiveTab(tab);
+    };
 
-        // Total units sold is ONLY calculated from sales where the seller is a Franchise.
-        const franchiseSales = reportData.filter(sale => sale.seller?.role === 'Franchise');
-        const totalUnitsSold = franchiseSales.reduce((acc, sale) => acc + sale.quantity, 0);
-        
-        return { totalRevenue, totalUnitsSold };
-    }, [reportData]);
-    
+    useEffect(() => {
+        if(startDate && endDate) {
+            setActiveTab('');
+        }
+    }, [startDate, endDate]);
+
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-IN', {
             day: '2-digit', month: 'short', year: 'numeric'
@@ -97,7 +91,7 @@ export default function ReportsView() {
             const url = URL.createObjectURL(blob);
             const date = new Date().toISOString().split('T')[0];
             link.setAttribute('href', url);
-            link.setAttribute('download', `sales-report-${activeTab}-${roleFilter}-${date}.csv`);
+            link.setAttribute('download', `sales-report-${date}.csv`);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
@@ -108,8 +102,8 @@ export default function ReportsView() {
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <div className="flex flex-wrap justify-between items-center mb-4">
-                 <h2 className="text-2xl font-semibold text-gray-700">Sales Reports</h2>
-                 <button 
+                <h2 className="text-2xl font-semibold text-gray-700">Sales Records</h2>
+                <button 
                     onClick={handleDownloadCsv}
                     className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 flex items-center gap-2"
                 >
@@ -120,24 +114,39 @@ export default function ReportsView() {
                 </button>
             </div>
             
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
-                <div className="flex border-b">
-                    <button onClick={() => setActiveTab('total')} className={`px-4 py-2 font-semibold ${activeTab === 'total' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500'}`}>Total Sales</button>
-                    <button onClick={() => setActiveTab('monthly')} className={`px-4 py-2 font-semibold ${activeTab === 'monthly' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500'}`}>Last Month</button>
-                    <button onClick={() => setActiveTab('halfYearly')} className={`px-4 py-2 font-semibold ${activeTab === 'halfYearly' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500'}`}>Last 6 Months</button>
+            <div className="flex flex-col gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
+                {/* Time Period and Role Filters */}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex border-b">
+                        <button onClick={() => handleTabClick('total')} className={`px-4 py-2 font-semibold ${activeTab === 'total' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500'}`}>Total Sales</button>
+                        <button onClick={() => handleTabClick('monthly')} className={`px-4 py-2 font-semibold ${activeTab === 'monthly' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500'}`}>Last Month</button>
+                        <button onClick={() => handleTabClick('halfYearly')} className={`px-4 py-2 font-semibold ${activeTab === 'halfYearly' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500'}`}>Last 6 Months</button>
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium mr-2">Filter by Role:</label>
+                        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="p-2 border rounded-md">
+                            {roles.map(role => <option key={role} value={role}>{role}</option>)}
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label className="text-sm font-medium mr-2">Filter by Role:</label>
-                    <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="p-2 border rounded-md">
-                        {roles.map(role => <option key={role} value={role}>{role}</option>)}
-                    </select>
+                {/* Date Range Filter */}
+                <div className="flex flex-wrap items-center gap-4 pt-4 border-t">
+                     <label className="text-sm font-medium">Or select custom date range:</label>
+                     <input 
+                        type="date" 
+                        value={startDate} 
+                        onChange={e => setStartDate(e.target.value)}
+                        className="p-2 border rounded-md" 
+                    />
+                    <span className="text-gray-500">to</span>
+                    <input 
+                        type="date" 
+                        value={endDate} 
+                        onChange={e => setEndDate(e.target.value)}
+                        className="p-2 border rounded-md"
+                        disabled={!startDate}
+                    />
                 </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <StatCard title="Total Revenue" value={`₹${summaryStats.totalRevenue.toLocaleString('en-IN')}`} />
-                {/* --- UPDATED: The title of the stat card for clarity --- */}
-                <StatCard title="Total Unit Sold" value={summaryStats.totalUnitsSold.toLocaleString('en-IN')} />
             </div>
 
             {isLoading ? (
@@ -175,4 +184,3 @@ export default function ReportsView() {
         </div>
     );
 }
-

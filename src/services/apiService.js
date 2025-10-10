@@ -108,7 +108,6 @@ export const getUsers = () => {
   }).then(handleResponse);
 };
 
-// ADD THIS FUNCTION to update a user's details
 export const updateUser = (userId, userData) => {
   return fetch(`/api/users/${userId}`, {
     method: 'PUT',
@@ -118,7 +117,6 @@ export const updateUser = (userId, userData) => {
   }).then(handleResponse);
 };
 
-// ADD THIS FUNCTION to delete a user
 export const deleteUser = (userId) => {
   return fetch(`/api/users/${userId}`, {
     method: 'DELETE',
@@ -133,18 +131,12 @@ export const getUserDetails = (userId) => {
 };
 
 
-// --- Sales ---
+// --- Sales & Purchases ---
 export const createSale = (saleData) => {
   return fetch('/api/sales', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(saleData),
-    credentials: 'include'
-  }).then(handleResponse);
-};
-
-export const getSalesForUser = (userId) => {
-  return fetch(`/api/sales/user/${userId}`, {
     credentials: 'include'
   }).then(handleResponse);
 };
@@ -155,13 +147,25 @@ export const getSales = () => {
   }).then(handleResponse);
 };
 
-export const getUsersByRole = (role) => {
-  return fetch(`/api/users/by-role?role=${role}`, {
+export const createPurchase = (purchaseData) => {
+  return fetch('/api/transactions/purchase', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(purchaseData),
     credentials: 'include'
   }).then(handleResponse);
 };
 
-// --- Payouts ---
+export const createDirectPurchase = (purchaseData) => {
+  return fetch('/api/transactions/direct-purchase', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(purchaseData),
+    credentials: 'include'
+  }).then(handleResponse);
+};
+
+// --- Payouts (Profit from Admin) ---
 export const getPendingPayouts = () => {
   return fetch(`/api/payouts/pending`).then(handleResponse);
 };
@@ -189,23 +193,24 @@ export const getUserInventory = () => {
   }).then(handleResponse);
 };
 
-export const getAdminInventory = () => {
-  return fetch(`/api/inventory/admin`).then(handleResponse);
-};
-
 export const getUplineInventory = () => {
   return fetch(`/api/upline-inventory`, {
     credentials: 'include'
   }).then(handleResponse);
 };
 
-// ADD THIS NEW FUNCTION
-
-export const getSalesReport = (timePeriod, role) => {
+// --- Reports ---
+export const getSalesReport = (timePeriod, role, startDate, endDate) => { // ADDED startDate, endDate
   const params = new URLSearchParams();
-  if (timePeriod) {
+  
+  // Custom date range takes priority
+  if (startDate && endDate) {
+    params.append('startDate', startDate);
+    params.append('endDate', endDate);
+  } else if (timePeriod) {
     params.append('timePeriod', timePeriod);
   }
+
   if (role && role !== 'All') {
     params.append('role', role);
   }
@@ -215,11 +220,50 @@ export const getSalesReport = (timePeriod, role) => {
   }).then(handleResponse);
 };
 
+// --- Misc ---
 export const changePassword = (passwordData) => {
   return fetch('/api/users/change-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(passwordData),
+    credentials: 'include'
+  }).then(handleResponse);
+};
+
+export const getUsersByRole = (role) => {
+    return fetch(`/api/users/by-role?role=${role}`, {
+      credentials: 'include'
+    }).then(handleResponse);
+};
+  
+
+// --- NEW FUNCTIONS FOR PAYMENTS ---
+
+// Gets the list of transactions the logged-in user needs to pay (their debts)
+export const getPayables = () => {
+    return fetch('/api/transactions/payable', {
+        credentials: 'include'
+    }).then(handleResponse);
+};
+
+// Gets the list of unpaid transactions owed to the logged-in user
+export const getReceivables = () => {
+    return fetch('/api/transactions/receivable', {
+        credentials: 'include'
+    }).then(handleResponse);
+};
+
+// Marks a specific transaction as paid
+export const payTransaction = (transactionId) => {
+    return fetch(`/api/transactions/${transactionId}/pay`, {
+        method: 'POST',
+        credentials: 'include'
+    }).then(handleResponse);
+};
+
+// --- NEW ANALYTICS FUNCTION ---
+export const getAdminAnalytics = () => {
+  return fetch('/api/analytics/admin', {
     credentials: 'include'
   }).then(handleResponse);
 };

@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
+
 export async function GET(request, { params }) {
   try {
     const { userId } = params;
@@ -26,12 +27,11 @@ export async function GET(request, { params }) {
     ]);
 
     const totalProfit = transactions.reduce((acc, transaction) => acc + transaction.profit, 0);
-
     const totalPaid = payouts.reduce((acc, payout) => acc + payout.amount, 0);
-
     const pendingBalance = totalProfit - totalPaid;
 
-    return NextResponse.json({ pendingBalance });
+    // UPDATED to return totalProfit as well
+    return NextResponse.json({ pendingBalance, totalProfit });
 
   } catch (error) {
     console.error("Failed to fetch pending payout for user:", error);
