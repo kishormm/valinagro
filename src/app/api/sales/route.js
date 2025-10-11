@@ -39,7 +39,7 @@ export async function GET() {
   }
 }
 
-// POST function (for creating sales) - REVISED LOGIC
+// POST function (for creating sales) - REVISED PROFIT LOGIC
 export async function POST(request) {
   try {
     const loggedInUser = await getLoggedInUser();
@@ -55,22 +55,18 @@ export async function POST(request) {
     let stockHolderId;
 
     if (loggedInUser.role === 'Farmer') {
-      // If a Farmer is "creating a sale", they are actually buying from their upline.
       if (!loggedInUser.uplineId) {
         return NextResponse.json({ error: 'Your account is not assigned to a dealer.' }, { status: 400 });
       }
       sellerId = loggedInUser.uplineId;
       buyerId = loggedInUser.id;
-      stockHolderId = sellerId; // We check the dealer's stock
+      stockHolderId = sellerId;
     } 
-    // --- THIS IS THE CORRECTED LOGIC ---
-    // All roles other than Farmer sell from their OWN stock.
     else {
       sellerId = loggedInUser.id;
       buyerId = body.buyerId;
-      stockHolderId = sellerId; // Franchise, Distributor, etc. check their OWN stock
+      stockHolderId = sellerId;
     }
-    // --- END OF CORRECTION ---
 
     if (!buyerId) {
         return NextResponse.json({ error: 'Buyer could not be identified for this transaction.' }, { status: 400 });
@@ -92,31 +88,34 @@ export async function POST(request) {
       return NextResponse.json({ error: `The seller has insufficient stock for ${product.name}.` }, { status: 400 });
     }
 
-    // --- Price and Profit Calculation (Unchanged) ---
+    // --- CORRECTED PRICE AND PROFIT CALCULATION ---
     let purchasePrice;
     let costPrice;
 
+    // Determine the seller's cost price (what they paid for the product)
     switch (seller.role) {
-      case 'Admin': costPrice = 0; break;
+      case 'Admin': costPrice = 0; break; // Admin's cost is always 0
       case 'Franchise': costPrice = product.franchisePrice; break;
       case 'Distributor': costPrice = product.distributorPrice; break;
       case 'SubDistributor': costPrice = product.subDistributorPrice; break;
       case 'Dealer': costPrice = product.dealerPrice; break;
-      default: costPrice = 0;
+      default: return NextResponse.json({ error: 'Invalid seller role.' }, { status: 400 });
     }
 
+    // Determine the buyer's purchase price (what they are paying now)
     switch (buyer.role) {
       case 'Franchise': purchasePrice = product.franchisePrice; break;
       case 'Distributor': purchasePrice = product.distributorPrice; break;
       case 'SubDistributor': purchasePrice = product.subDistributorPrice; break;
       case 'Dealer': purchasePrice = product.dealerPrice; break;
       case 'Farmer': purchasePrice = product.farmerPrice; break;
-      default:
-        return NextResponse.json({ error: 'Invalid buyer role.' }, { status: 400 });
+      default: return NextResponse.json({ error: 'Invalid buyer role.' }, { status: 400 });
     }
 
     const totalAmount = purchasePrice * quantity;
+    // This is the universal and correct formula for profit
     const profit = (purchasePrice - costPrice) * quantity;
+    // --- END OF CORRECTION ---
 
     // --- Database Transaction ---
     const newTransaction = await prisma.$transaction(async (tx) => {
@@ -141,7 +140,7 @@ export async function POST(request) {
             quantity, 
             purchasePrice, 
             totalAmount, 
-            profit,
+            profit, // The newly corrected profit is saved here
             paymentStatus: 'PENDING'
         },
       });
