@@ -102,8 +102,8 @@ export default function FranchiseDashboard() {
     if (user) fetchData();
   }, [user, fetchData]);
 
-  const handlePayTransaction = async (transactionId) => {
-    if (window.confirm('Are you sure you want to complete this payment?')) {
+  const handlePayTransaction = async (transactionId, sellerName) => {
+    if (window.confirm(`Are you sure you want to complete this payment to ${sellerName}?`)) {
       try {
         await payTransaction(transactionId);
         toast.success('Payment successful!');
@@ -208,103 +208,114 @@ export default function FranchiseDashboard() {
 
           {/* Pending Payments Section (Payables) */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Upline</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Product</th>
-                    <th className="p-3">Owed To</th>
-                    <th className="p-3 text-right">Amount</th>
-                    <th className="p-3 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payables.length > 0 ? payables.map(p => (
-                    <tr key={p.id} className="border-b">
-                      <td className="p-3">{new Date(p.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3 font-medium">{p.product.name} (x{p.quantity})</td>
-                      <td className="p-3">{p.seller.name}</td>
-                      <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => handlePayTransaction(p.id)}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
-                        >
-                          Pay Now
-                        </button>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+             <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Upline</h2>
+             <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                 <thead>
+                   <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
+                     <th className="p-3">Date</th>
+                     <th className="p-3">Product</th>
+                     <th className="p-3">Owed To</th>
+                     <th className="p-3 text-right">Amount</th>
+                     <th className="p-3 text-center">Actions</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {payables.length > 0 ? payables.map(p => (
+                     <tr key={p.id} className="border-b">
+                       <td className="p-3">{new Date(p.createdAt).toLocaleDateString()}</td>
+                       <td className="p-3 font-medium">{p.product.name} (x{p.quantity})</td>
+                       <td className="p-3">{p.seller.name}</td>
+                       <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
+                       <td className="p-3 text-center">
+                         <button
+                           onClick={() => handlePayTransaction(p.id, p.seller.name)}
+                           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
+                         >
+                           Pay Now
+                         </button>
+                       </td>
+                     </tr>
+                   )) : (
+                     <tr><td colSpan="5" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
+           </div>
 
-          {/* Pending Payouts Section (Receivables) */}
+          {/* Pending Payouts Section (Receivables) - UPDATED */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Owed By</th>
-                    <th className="p-3">Product</th>
-                    <th className="p-3 text-right">Amount</th>
-                  </tr>
+                    <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Owed By</th>
+                        <th className="p-3">Product</th>
+                        <th className="p-3 text-right">Amount</th>
+                        <th className="p-3 text-center">Status</th> {/* NEW COLUMN */}
+                    </tr>
                 </thead>
                 <tbody>
-                  {receivables.transactions.length > 0 ? receivables.transactions.map(t => (
-                    <tr key={t.id} className="border-b">
-                      <td className="p-3">{new Date(t.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3">{t.buyer.name}</td>
-                      <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
-                      <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">No pending payments from your downline.</td></tr>
-                  )}
+                    {receivables.transactions.length > 0 ? receivables.transactions.map(t => (
+                        <tr key={t.id} className="border-b">
+                            <td className="p-3">{new Date(t.createdAt).toLocaleDateString()}</td>
+                            <td className="p-3">{t.buyer.name}</td>
+                            <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
+                            <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
+                            {/* NEW CELL WITH CONDITIONAL STYLING */}
+                            <td className="p-3 text-center">
+                                {t.paymentStatus === 'PENDING' ? (
+                                    <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                        Pending
+                                    </span>
+                                ) : (
+                                    <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                        Paid
+                                    </span>
+                                )}
+                            </td>
+                        </tr>
+                    )) : (
+                        <tr><td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments from your downline.</td></tr>
+                    )}
                 </tbody>
-              </table>
+                </table>
             </div>
           </div>
 
-          {/* Purchase Section */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold text-gray-700 mb-4">Purchase from Admin</h2>
             <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
           </div>
 
-          {/* Sell and Inventory Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="flex flex-col gap-8">
               {/* Sell to Distributor Form */}
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Distributor</h2>
                 <form onSubmit={handleSellToDistributor} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium">Product</label>
-                        <select value={sellToDistributorProductId} onChange={(e) => setSellToDistributorProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                            <option value="">Select a product from your inventory</option>
-                            {inventory.filter(item => item.quantity > 0).map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Quantity</label>
-                        <input type="number" value={sellToDistributorQuantity} onChange={(e) => setSellToDistributorQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForDistributor?.quantity || 0} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Sell To</label>
-                        <select value={sellToDistributorId} onChange={(e) => setSellToDistributorId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                            <option value="">Select a distributor</option>
-                            {downline.map(d => <option key={d.id} value={d.id}>{d.name} ({d.userId})</option>)}
-                        </select>
-                    </div>
-                    <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
+                  <div>
+                      <label className="block text-sm font-medium">Product</label>
+                      <select value={sellToDistributorProductId} onChange={(e) => setSellToDistributorProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                          <option value="">Select a product from your inventory</option>
+                          {inventory.filter(item => item.quantity > 0).map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
+                      </select>
+                  </div>
+                  <div>
+                      <label className="block text-sm font-medium">Quantity</label>
+                      <input type="number" value={sellToDistributorQuantity} onChange={(e) => setSellToDistributorQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForDistributor?.quantity || 0} />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-medium">Sell To</label>
+                      <select value={sellToDistributorId} onChange={(e) => setSellToDistributorId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                          <option value="">Select a distributor</option>
+                          {downline.map(d => <option key={d.id} value={d.id}>{d.name} ({d.userId})</option>)}
+                      </select>
+                  </div>
+                  <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
                 </form>
               </div>
               

@@ -46,12 +46,11 @@ export default function SubDistributorDashboard() {
   const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
-  // Form states for selling to Dealer
+  // Form states
   const [sellToDealerProductId, setSellToDealerProductId] = useState('');
   const [sellToDealerQuantity, setSellToDealerQuantity] = useState(1);
   const [sellToDealerId, setSellToDealerId] = useState('');
   
-  // Form states for selling to Farmer
   const [sellToFarmerProductId, setSellToFarmerProductId] = useState('');
   const [sellToFarmerQuantity, setSellToFarmerQuantity] = useState(1);
   const [sellToFarmerId, setSellToFarmerId] = useState('');
@@ -103,8 +102,8 @@ export default function SubDistributorDashboard() {
     if(user) fetchData();
   }, [user, fetchData]);
 
-  const handlePayTransaction = async (transactionId) => {
-    if (window.confirm('Are you sure you want to complete this payment?')) {
+  const handlePayTransaction = async (transactionId, sellerName) => {
+    if (window.confirm(`Are you sure you want to complete this payment to ${sellerName}?`)) {
       try {
         await payTransaction(transactionId);
         toast.success('Payment successful!');
@@ -226,7 +225,7 @@ export default function SubDistributorDashboard() {
                       <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => handlePayTransaction(p.id)}
+                          onClick={() => handlePayTransaction(p.id, p.seller.name)}
                           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
                         >
                           Pay Now
@@ -241,7 +240,7 @@ export default function SubDistributorDashboard() {
             </div>
           </div>
 
-          {/* Pending Payouts Section (Receivables) */}
+          {/* Pending Payouts Section (Receivables) - UPDATED */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
             <div className="overflow-x-auto">
@@ -252,6 +251,7 @@ export default function SubDistributorDashboard() {
                     <th className="p-3">Owed By</th>
                     <th className="p-3">Product</th>
                     <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,9 +261,20 @@ export default function SubDistributorDashboard() {
                       <td className="p-3">{t.buyer.name}</td>
                       <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
                       <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
+                      <td className="p-3 text-center">
+                        {t.paymentStatus === 'PENDING' ? (
+                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                Pending
+                            </span>
+                        ) : (
+                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                Paid
+                            </span>
+                        )}
+                      </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">No pending payments from your downline.</td></tr>
+                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments from your downline.</td></tr>
                   )}
                 </tbody>
               </table>

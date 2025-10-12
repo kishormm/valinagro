@@ -23,22 +23,28 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // REMOVED the 30-day date filter
+
     const receivableTransactions = await prisma.transaction.findMany({
       where: {
+        // UPDATED LOGIC: Simply get all transactions where the user is the seller.
+        // The frontend will show the status of each one.
         sellerId: loggedInUser.id,
-        paymentStatus: 'PENDING',
       },
       include: {
-        // UPDATED THIS LINE to include userId and role
         buyer: { select: { name: true, userId: true, role: true } },
         product: { select: { name: true } },
       },
       orderBy: {
-        createdAt: 'asc',
+        createdAt: 'desc', // Show most recent transactions first
       },
     });
 
-    const totalReceivable = receivableTransactions.reduce((acc, t) => acc + t.totalAmount, 0);
+    // This calculation remains the same. It correctly calculates the total
+    // for ONLY the pending transactions.
+    const totalReceivable = receivableTransactions
+      .filter(t => t.paymentStatus === 'PENDING')
+      .reduce((acc, t) => acc + t.totalAmount, 0);
 
     return NextResponse.json({
       transactions: receivableTransactions,

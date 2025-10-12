@@ -31,7 +31,7 @@ const Loader = () => (
     </div>
 );
 
-export default function DealerDashboard() {
+export default function SubDistributorDashboard() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
 
@@ -46,12 +46,17 @@ export default function DealerDashboard() {
   const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
-  // Form states for selling to Farmer
-  const [sellProductId, setSellProductId] = useState('');
-  const [sellQuantity, setSellQuantity] = useState(1);
-  const [sellToId, setSellToId] = useState('');
+  // Form states
+  const [sellToDealerProductId, setSellToDealerProductId] = useState('');
+  const [sellToDealerQuantity, setSellToDealerQuantity] = useState(1);
+  const [sellToDealerId, setSellToDealerId] = useState('');
   
-  const selectedProductInStock = inventory.find(item => item.productId === sellProductId);
+  const [sellToFarmerProductId, setSellToFarmerProductId] = useState('');
+  const [sellToFarmerQuantity, setSellToFarmerQuantity] = useState(1);
+  const [sellToFarmerId, setSellToFarmerId] = useState('');
+
+  const selectedProductForDealer = inventory.find(item => item.productId === sellToDealerProductId);
+  const selectedProductForFarmer = inventory.find(item => item.productId === sellToFarmerProductId);
 
   const totalAmountDue = payables.reduce((acc, p) => acc + p.totalAmount, 0);
 
@@ -97,8 +102,8 @@ export default function DealerDashboard() {
     if(user) fetchData();
   }, [user, fetchData]);
 
-  const handlePayTransaction = async (transactionId) => {
-    if (window.confirm('Are you sure you want to complete this payment?')) {
+  const handlePayTransaction = async (transactionId, sellerName) => {
+    if (window.confirm(`Are you sure you want to complete this payment to ${sellerName}?`)) {
       try {
         await payTransaction(transactionId);
         toast.success('Payment successful!');
@@ -112,17 +117,29 @@ export default function DealerDashboard() {
   const handleLogout = () => { logout(); router.push('/'); };
   
   useEffect(() => { 
-    if (user && user.role !== 'Dealer') router.push('/'); 
+    if (user && user.role !== 'SubDistributor') router.push('/'); 
   }, [user, router]);
+  
+  const handleSellToDealer = async (e) => {
+    e.preventDefault();
+    if (!sellToDealerProductId || !sellToDealerId || sellToDealerQuantity < 1) return toast.error("Please fill all fields.");
+    if (parseInt(sellToDealerQuantity) > (selectedProductForDealer?.quantity || 0)) return toast.error(`Not enough stock.`);
+    try {
+      await createSale({ buyerId: sellToDealerId, productId: sellToDealerProductId, quantity: parseInt(sellToDealerQuantity) });
+      toast.success('Sale to Dealer recorded successfully!');
+      setSellToDealerProductId(''); setSellToDealerQuantity(1); setSellToDealerId('');
+      fetchData();
+    } catch (error) { console.error(error); }
+  };
   
   const handleSellToFarmer = async (e) => {
     e.preventDefault();
-    if (!sellProductId || !sellToId || sellQuantity < 1) return toast.error("Please fill all fields for the sale.");
-    if (parseInt(sellQuantity) > (selectedProductInStock?.quantity || 0)) return toast.error(`Not enough stock.`);
+    if (!sellToFarmerProductId || !sellToFarmerId || sellToFarmerQuantity < 1) return toast.error("Please fill all fields.");
+    if (parseInt(sellToFarmerQuantity) > (selectedProductForFarmer?.quantity || 0)) return toast.error(`Not enough stock.`);
     try {
-      await createSale({ buyerId: sellToId, productId: sellProductId, quantity: parseInt(sellQuantity) });
+      await createSale({ buyerId: sellToFarmerId, productId: sellToFarmerProductId, quantity: parseInt(sellToFarmerQuantity) });
       toast.success('Sale to Farmer recorded successfully!');
-      setSellProductId(''); setSellQuantity(1); setSellToId('');
+      setSellToFarmerProductId(''); setSellToFarmerQuantity(1); setSellToFarmerId('');
       fetchData();
     } catch (error) { console.error(error); }
   };
@@ -148,7 +165,7 @@ export default function DealerDashboard() {
         onClose={() => setIsRecruitModalOpen(false)}
         onUserAdded={fetchData}
         uplineId={user.id}
-        roleToCreate="Farmer"
+        roleToCreate="Dealer"
       />
 
       <ChangePasswordModal
@@ -159,9 +176,9 @@ export default function DealerDashboard() {
 
       <div className="min-h-screen bg-stone-50">
         <DashboardHeader 
-          title="Dealer Dashboard" 
+          title="Sub-Distributor Dashboard" 
           userName={user.name} 
-          onLogout={handleLogout} 
+          onLogout={handleLogout}
           onChangePassword={() => setIsChangePasswordModalOpen(true)}
         />
         <main className="container mx-auto p-6 space-y-8">
@@ -208,7 +225,7 @@ export default function DealerDashboard() {
                       <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => handlePayTransaction(p.id)}
+                          onClick={() => handlePayTransaction(p.id, p.seller.name)}
                           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
                         >
                           Pay Now
@@ -223,7 +240,7 @@ export default function DealerDashboard() {
             </div>
           </div>
 
-          {/* Pending Payouts Section (Receivables) */}
+          {/* Pending Payouts Section (Receivables) - UPDATED */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
             <div className="overflow-x-auto">
@@ -234,6 +251,7 @@ export default function DealerDashboard() {
                     <th className="p-3">Owed By</th>
                     <th className="p-3">Product</th>
                     <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -243,9 +261,20 @@ export default function DealerDashboard() {
                       <td className="p-3">{t.buyer.name}</td>
                       <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
                       <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
+                      <td className="p-3 text-center">
+                        {t.paymentStatus === 'PENDING' ? (
+                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                Pending
+                            </span>
+                        ) : (
+                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                Paid
+                            </span>
+                        )}
+                      </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">No pending payments from your downline.</td></tr>
+                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments from your downline.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -262,24 +291,24 @@ export default function DealerDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="flex flex-col gap-8">
               <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Farmer</h2>
-                <form onSubmit={handleSellToFarmer} className="space-y-4">
-                  <div>
+                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Dealer</h2>
+                <form onSubmit={handleSellToDealer} className="space-y-4">
+                   <div>
                     <label className="block text-sm font-medium">Product</label>
-                    <select value={sellProductId} onChange={(e) => setSellProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                    <select value={sellToDealerProductId} onChange={(e) => setSellToDealerProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
                       <option value="">Select a product</option>
                       {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium">Quantity</label>
-                    <input type="number" value={sellQuantity} onChange={(e) => setSellQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductInStock?.quantity || 0} />
+                    <input type="number" value={sellToDealerQuantity} onChange={(e) => setSellToDealerQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForDealer?.quantity || 0} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium">Sell To</label>
-                    <select value={sellToId} onChange={(e) => setSellToId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                        <option value="">Select a Farmer</option>
-                        {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
+                    <select value={sellToDealerId} onChange={(e) => setSellToDealerId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                        <option value="">Select Dealer</option>
+                        {downline.map(d => <option key={d.id} value={d.id}>{d.name} ({d.userId})</option>)}
                     </select>
                   </div>
                   <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
@@ -287,13 +316,38 @@ export default function DealerDashboard() {
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Farmer</h2>
-                <p className="text-gray-600 mb-4">Click the button below to add a new farmer to your downline.</p>
+                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell Directly to Farmer</h2>
+                <form onSubmit={handleSellToFarmer} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium">Product</label>
+                    <select value={sellToFarmerProductId} onChange={(e) => setSellToFarmerProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                      <option value="">Select a product</option>
+                      {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Quantity</label>
+                    <input type="number" value={sellToFarmerQuantity} onChange={(e) => setSellToFarmerQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForFarmer?.quantity || 0} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Sell To Farmer</label>
+                    <select value={sellToFarmerId} onChange={(e) => setSellToFarmerId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                      <option value="">Select a farmer</option>
+                      {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
+                    </select>
+                  </div>
+                  <button type="submit" className="w-full mt-2 py-3 bg-purple-600 text-white font-bold rounded-md hover:bg-purple-700">Complete Farmer Sale</button>
+                </form>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Dealer</h2>
+                <p className="text-gray-600 mb-4">Click the button below to add a new dealer to your downline.</p>
                 <button 
                   onClick={() => setIsRecruitModalOpen(true)}
                   className="w-full mt-2 py-3 bg-teal-600 text-white font-bold rounded-md hover:bg-teal-700"
                 >
-                  Recruit New Farmer
+                  Recruit New Dealer
                 </button>
               </div>
             </div>

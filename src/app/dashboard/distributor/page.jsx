@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import {
-  getDownline,
-  createSale,
+import { 
+  getDownline, 
+  createSale, 
   getPendingPayoutForUser,
   getUserInventory,
   getHierarchy,
@@ -19,7 +19,7 @@ import DashboardHeader from '@/components/DashboardHeader';
 import HierarchyNode from '@/components/admin/HierarchyNode';
 import UserFormModal from '@/components/UserFormModal';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
-import UplineProductStore from '@/components/UplineProductStore';
+import UplineProductStore from '@/components/UplineProductStore'; // CORRECTED IMPORT
 import BuyFromAdminForm from '@/components/BuyFromAdminForm';
 import toast from 'react-hot-toast';
 
@@ -32,13 +32,14 @@ const Loader = () => (
     </div>
 );
 
+
 export default function DistributorDashboard() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
 
   const [inventory, setInventory] = useState([]);
   const [downline, setDownline] = useState([]);
-  const [allFarmers, setAllFarmers] = useState([]);
+  const [allFarmers, setAllFarmers] = useState([]); 
   const [hierarchy, setHierarchy] = useState(null);
   const [payables, setPayables] = useState([]);
   const [receivables, setReceivables] = useState({ transactions: [], total: 0 });
@@ -102,8 +103,8 @@ export default function DistributorDashboard() {
     if(user) fetchData();
   }, [user, fetchData]);
 
-  const handlePayTransaction = async (transactionId) => {
-    if (window.confirm('Are you sure you want to complete this payment?')) {
+  const handlePayTransaction = async (transactionId, sellerName) => {
+    if (window.confirm(`Are you sure you want to complete this payment to ${sellerName}?`)) {
       try {
         await payTransaction(transactionId);
         toast.success('Payment successful!');
@@ -167,7 +168,7 @@ export default function DistributorDashboard() {
         uplineId={user.id}
         roleToCreate="SubDistributor"
       />
-     
+      
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
@@ -225,7 +226,7 @@ export default function DistributorDashboard() {
                       <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => handlePayTransaction(p.id)}
+                          onClick={() => handlePayTransaction(p.id, p.seller.name)}
                           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
                         >
                           Pay Now
@@ -251,6 +252,7 @@ export default function DistributorDashboard() {
                     <th className="p-3">Owed By</th>
                     <th className="p-3">Product</th>
                     <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -260,19 +262,31 @@ export default function DistributorDashboard() {
                       <td className="p-3">{t.buyer.name}</td>
                       <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
                       <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
+                      <td className="p-3 text-center">
+                        {t.paymentStatus === 'PENDING' ? (
+                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                Pending
+                            </span>
+                        ) : (
+                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                Paid
+                            </span>
+                        )}
+                      </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">No pending payments from your downline.</td></tr>
+                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments from your downline.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-         
+          
           {/* Purchase Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
               <div className="flex flex-col gap-8">
                 <h2 className="text-2xl font-semibold text-gray-700">Purchase Options</h2>
+                {/* CORRECTED to use UplineProductStore */}
                 <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
               </div>
               <div className="flex flex-col gap-8">
@@ -287,50 +301,50 @@ export default function DistributorDashboard() {
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Sub-Distributor</h2>
                 <form onSubmit={handleSellToSubDistributor} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium">Product</label>
-                    <select value={sellToSubDistProductId} onChange={(e) => setSellToSubDistProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                      <option value="">Select a product</option>
-                      {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Quantity</label>
-                    <input type="number" value={sellToSubDistQuantity} onChange={(e) => setSellToSubDistQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForSubDist?.quantity || 0} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Sell To</label>
-                    <select value={sellToSubDistId} onChange={(e) => setSellToSubDistId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                        <option value="">Select Sub-Distributor</option>
-                        {downline.map(d => <option key={d.id} value={d.id}>{d.name} ({d.userId})</option>)}
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
+                    <div>
+                        <label className="block text-sm font-medium">Product</label>
+                        <select value={sellToSubDistProductId} onChange={(e) => setSellToSubDistProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                        <option value="">Select a product</option>
+                        {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium">Quantity</label>
+                        <input type="number" value={sellToSubDistQuantity} onChange={(e) => setSellToSubDistQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForSubDist?.quantity || 0} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium">Sell To</label>
+                        <select value={sellToSubDistId} onChange={(e) => setSellToSubDistId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                            <option value="">Select Sub-Distributor</option>
+                            {downline.map(d => <option key={d.id} value={d.id}>{d.name} ({d.userId})</option>)}
+                        </select>
+                    </div>
+                    <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
                 </form>
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell Directly to Farmer</h2>
                 <form onSubmit={handleSellToFarmer} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium">Product</label>
-                    <select value={sellToFarmerProductId} onChange={(e) => setSellToFarmerProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                      <option value="">Select a product</option>
-                      {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Quantity</label>
-                    <input type="number" value={sellToFarmerQuantity} onChange={(e) => setSellToFarmerQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForFarmer?.quantity || 0} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Sell To Farmer</label>
-                    <select value={sellToFarmerId} onChange={(e) => setSellToFarmerId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                      <option value="">Select a farmer</option>
-                      {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full mt-2 py-3 bg-purple-600 text-white font-bold rounded-md hover:bg-purple-700">Complete Farmer Sale</button>
+                    <div>
+                        <label className="block text-sm font-medium">Product</label>
+                        <select value={sellToFarmerProductId} onChange={(e) => setSellToFarmerProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                        <option value="">Select a product</option>
+                        {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium">Quantity</label>
+                        <input type="number" value={sellToFarmerQuantity} onChange={(e) => setSellToFarmerQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForFarmer?.quantity || 0} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium">Sell To Farmer</label>
+                        <select value={sellToFarmerId} onChange={(e) => setSellToFarmerId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
+                        <option value="">Select a farmer</option>
+                        {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
+                        </select>
+                    </div>
+                    <button type="submit" className="w-full mt-2 py-3 bg-purple-600 text-white font-bold rounded-md hover:bg-purple-700">Complete Farmer Sale</button>
                 </form>
               </div>
 
@@ -350,19 +364,19 @@ export default function DistributorDashboard() {
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Your Inventory</h2>
                  <div className="overflow-x-auto max-h-96">
-                    <table className="w-full text-left">
-                        <thead><tr className="bg-stone-100 text-stone-600 uppercase text-sm sticky top-0"><th className="p-3">Product Name</th><th className="p-3">Your Stock</th></tr></thead>
-                        <tbody>
-                            {inventory.length > 0 ? inventory.map(item => (
-                                <tr key={item.id} className="border-b"><td className="p-3">{item.product.name}</td><td className="p-3 font-medium">{item.quantity} Units</td></tr>
-                            )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty. Use the forms above to add stock.</td></tr>}
-                        </tbody>
-                    </table>
+                   <table className="w-full text-left">
+                     <thead><tr className="bg-stone-100 text-stone-600 uppercase text-sm sticky top-0"><th className="p-3">Product Name</th><th className="p-3">Your Stock</th></tr></thead>
+                     <tbody>
+                       {inventory.length > 0 ? inventory.map(item => (
+                           <tr key={item.id} className="border-b"><td className="p-3">{item.product.name}</td><td className="p-3 font-medium">{item.quantity} Units</td></tr>
+                       )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty. Use the forms above to add stock.</td></tr>}
+                     </tbody>
+                   </table>
                  </div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">My Team Hierarchy</h2>
-                 <div className="overflow-y-auto max-h-96 pl-2 border-l-2 border-stone-200">
+                 <div className="overflow-x-auto max-h-96 pl-2 border-l-2 border-stone-200">
                   {hierarchy ? (
                     <HierarchyNode user={hierarchy} />
                   ) : (

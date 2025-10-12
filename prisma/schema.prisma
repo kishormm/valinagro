@@ -76,20 +76,20 @@ model UserInventory {
 }
 
 model Transaction {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   quantity      Int
   purchasePrice Float
   totalAmount   Float
   profit        Float
-  createdAt     DateTime @default(now())
-  product       Product  @relation(fields: [productId], references: [id])
-  productId     String
-  seller        User     @relation("SellerTransactions", fields: [sellerId], references: [id])
-  sellerId      String
-  buyer         User     @relation("BuyerTransactions", fields: [buyerId], references: [id])
-  buyerId       String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt // <-- ADD THIS LINE
 
-  // NEW FIELD to track if the transaction has been paid
+  product       Product     @relation(fields: [productId], references: [id])
+  productId     String
+  seller        User        @relation("SellerTransactions", fields: [sellerId], references: [id])
+  sellerId      String
+  buyer         User        @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  buyerId       String
   paymentStatus PaymentStatus @default(PENDING)
 }
 

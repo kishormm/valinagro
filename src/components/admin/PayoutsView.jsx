@@ -27,17 +27,17 @@ export default function PayoutsView() {
   ];
 
   const fetchData = useCallback(async () => {
-    setIsLoading(true);
+    // No need to set loading true on re-fetch, only on initial load
     try {
-      const data = await getReceivables(); // UPDATED to fetch receivables
+      const data = await getReceivables();
       setReceivables(data);
     } catch (error) {
       console.error("Failed to fetch pending receivables:", error);
       toast.error("Could not load pending payments data.");
     } finally {
-      setIsLoading(false);
+      if (isLoading) setIsLoading(false);
     }
-  }, []);
+  }, [isLoading]);
 
   useEffect(() => {
     fetchData();
@@ -45,7 +45,6 @@ export default function PayoutsView() {
 
   const filteredReceivables = useMemo(() => {
     if (filter === 'All') return receivables.transactions;
-    // UPDATED filter logic to check the buyer's role on the transaction
     return receivables.transactions.filter(t => t.buyer.role === filter);
   }, [filter, receivables.transactions]);
 
@@ -53,15 +52,14 @@ export default function PayoutsView() {
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <div className="flex justify-between items-start mb-4">
         <div>
-            <h2 className="text-2xl font-semibold text-gray-700">Pending Payments to Admin</h2>
-            <p className="text-sm text-gray-500">List of unpaid transactions from users who bought directly from you.</p>
+            <h2 className="text-2xl font-semibold text-gray-700">Payments to Admin</h2>
+            <p className="text-sm text-gray-500">List of pending and recently completed payments from your downline.</p>
         </div>
         <div className="text-right">
-            <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Receivable</h3>
+            <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Receivable (Pending)</h3>
             <p className="text-3xl font-bold text-red-600 mt-1">₹{receivables.total.toFixed(2)}</p>
         </div>
       </div>
-
 
       <div className="flex flex-wrap gap-2 mb-6 border-y py-4">
         {roles.map(role => (
@@ -86,10 +84,9 @@ export default function PayoutsView() {
               <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
                 <th className="p-3 font-semibold">Date</th>
                 <th className="p-3 font-semibold">Owed By</th>
-                <th className="p-3 font-semibold">User ID</th>
-                <th className="p-3 font-semibold">Role</th>
                 <th className="p-3 font-semibold">Product</th>
-                <th className="p-3 font-semibold text-right">Pending Amount</th>
+                <th className="p-3 font-semibold text-right">Amount</th>
+                <th className="p-3 font-semibold text-center">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -97,16 +94,26 @@ export default function PayoutsView() {
                 filteredReceivables.map((transaction) => (
                   <tr key={transaction.id} className="border-b border-stone-200 hover:bg-stone-50">
                     <td className="p-3 text-gray-800">{new Date(transaction.createdAt).toLocaleDateString()}</td>
-                    <td className="p-3 text-gray-800 font-medium">{transaction.buyer.name}</td>
-                    <td className="p-3 text-gray-800">{transaction.buyer.userId}</td>
-                    <td className="p-3 text-gray-800">{transaction.buyer.role}</td>
+                    <td className="p-3 text-gray-800 font-medium">{transaction.buyer.name} ({transaction.buyer.userId})</td>
                     <td className="p-3 text-gray-800">{transaction.product.name} (x{transaction.quantity})</td>
-                    <td className="p-3 font-bold text-red-600 text-right">₹{transaction.totalAmount.toFixed(2)}</td>
+                    <td className="p-3 font-bold text-right">₹{transaction.totalAmount.toFixed(2)}</td>
+                    <td className="p-3 text-center">
+                        {/* CONDITIONAL RENDERING FOR STATUS */}
+                        {transaction.paymentStatus === 'PENDING' ? (
+                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                Pending
+                            </span>
+                        ) : (
+                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                Paid
+                            </span>
+                        )}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="p-4 text-center text-gray-500">No pending payments found for this filter.</td>
+                  <td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments found for this filter.</td>
                 </tr>
               )}
             </tbody>
