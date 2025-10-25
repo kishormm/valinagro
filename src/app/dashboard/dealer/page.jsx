@@ -19,7 +19,8 @@ import DashboardHeader from '../../../components/DashboardHeader';
 import HierarchyNode from '../../../components/admin/HierarchyNode';
 import UserFormModal from '../../../components/UserFormModal';
 import ChangePasswordModal from '../../../components/ChangePasswordModal';
-import UplineProductStore from '../../../components/UplineProductStore';
+import UplineProductStore from '../../../components/UplineProductStore'; // Renamed/Refactored component
+import BuyFromAdminForm from '../../../components/BuyFromAdminForm'; // IMPORTED
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -223,7 +224,7 @@ export default function DealerDashboard() {
             </div>
           </div>
 
-          {/* Pending Payouts Section (Receivables) - UPDATED */}
+          {/* Pending Payouts Section (Receivables) */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
             <div className="overflow-x-auto">
@@ -264,10 +265,18 @@ export default function DealerDashboard() {
             </div>
           </div>
 
-          {/* Purchase Section */}
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Purchase from Upline</h2>
-            <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
+          {/* Purchase Section - UPDATED */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <div className="flex flex-col gap-8">
+                <h2 className="text-2xl font-semibold text-gray-700">Purchase Options</h2>
+                {/* Option 1: Buy from direct upline (Sub-Distributor) */}
+                <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
+              </div>
+              <div className="flex flex-col gap-8">
+                <h2 className="text-2xl font-semibold text-gray-700 text-transparent lg:text-gray-700">.</h2> {/* Spacer for alignment */}
+                {/* Option 2: Buy directly from Admin */}
+                <BuyFromAdminForm onPurchaseSuccess={fetchData} /> 
+              </div>
           </div>
 
           {/* Sell and Inventory Section */}
