@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getAdminAnalytics } from '@/services/apiService'; // UPDATED
+import { getAdminAnalytics } from '@/services/apiService';
 import { ThreeDots } from 'react-loader-spinner';
 import toast from 'react-hot-toast';
 
@@ -19,7 +19,7 @@ export default function Analytics() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await getAdminAnalytics(); // UPDATED to a single, efficient API call
+        const data = await getAdminAnalytics();
         setStats(data);
       } catch (err) {
         console.error('Failed to fetch analytics data', err);
@@ -66,37 +66,8 @@ export default function Analytics() {
                 />
             </div>
 
-            {/* Profit Breakdown Section */}
-            <div>
-                <h3 className="text-lg font-semibold text-gray-600 mb-4">Profit Breakdown by Role (from Admin Sales)</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                    <StatCard
-                        title="from Franchise"
-                        value={`₹${(stats.profitByRole.Franchise || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        colorClass="bg-gray-100"
-                    />
-                    <StatCard
-                        title="from Distributor"
-                        value={`₹${(stats.profitByRole.Distributor || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        colorClass="bg-gray-100"
-                    />
-                     <StatCard
-                        title="from Sub-Distributor"
-                        value={`₹${(stats.profitByRole.SubDistributor || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        colorClass="bg-gray-100"
-                    />
-                     <StatCard
-                        title="from Dealer"
-                        value={`₹${(stats.profitByRole.Dealer || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        colorClass="bg-gray-100"
-                    />
-                     <StatCard
-                        title="from Farmer"
-                        value={`₹${(stats.profitByRole.Farmer || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                        colorClass="bg-gray-100"
-                    />
-                </div>
-            </div>
+            {/* --- PROFIT BREAKDOWN SECTION REMOVED --- */}
+
         </div>
       )}
     </div>

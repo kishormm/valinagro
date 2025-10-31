@@ -130,6 +130,14 @@ export const getUserDetails = (userId) => {
   }).then(handleResponse);
 };
 
+// --- NEW FUNCTION TO GRANT MEMBERSHIP (ADMIN ONLY) ---
+export const grantMembership = (userId) => {
+  return fetch(`/api/users/${userId}/grant-membership`, {
+    method: 'POST',
+    credentials: 'include'
+  }).then(handleResponse);
+};
+
 
 // --- Sales & Purchases ---
 export const createSale = (saleData) => {
@@ -157,7 +165,7 @@ export const createPurchase = (purchaseData) => {
 };
 
 export const createDirectPurchase = (purchaseData) => {
-  return fetch('/api/transactions/direct-purchase', {
+  return fetch('/api/transactions/buy-from-admin', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(purchaseData),
@@ -200,10 +208,9 @@ export const getUplineInventory = () => {
 };
 
 // --- Reports ---
-export const getSalesReport = (timePeriod, role, startDate, endDate) => { // ADDED startDate, endDate
+export const getSalesReport = (timePeriod, role, startDate, endDate) => {
   const params = new URLSearchParams();
   
-  // Custom date range takes priority
   if (startDate && endDate) {
     params.append('startDate', startDate);
     params.append('endDate', endDate);
@@ -237,31 +244,58 @@ export const getUsersByRole = (role) => {
 };
   
 
-// --- NEW FUNCTIONS FOR PAYMENTS ---
+// --- PAYMENTS & COMMISSIONS ---
 
-// Gets the list of transactions the logged-in user needs to pay (their debts)
 export const getPayables = () => {
     return fetch('/api/transactions/payable', {
         credentials: 'include'
     }).then(handleResponse);
 };
 
-// Gets the list of unpaid transactions owed to the logged-in user
 export const getReceivables = () => {
     return fetch('/api/transactions/receivable', {
         credentials: 'include'
     }).then(handleResponse);
 };
 
-// Marks a specific transaction as paid
-export const payTransaction = (transactionId) => {
-    return fetch(`/api/transactions/${transactionId}/pay`, {
+export const uploadPaymentProof = (transactionId, formData) => {
+  return fetch(`/api/transactions/${transactionId}/upload-proof`, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include'
+  }).then(handleResponse);
+};
+
+export const verifyPayment = (transactionId) => {
+    return fetch(`/api/transactions/${transactionId}/verify`, {
         method: 'POST',
         credentials: 'include'
     }).then(handleResponse);
 };
 
-// --- NEW ANALYTICS FUNCTION ---
+export const getPendingCommissions = () => {
+    return fetch('/api/commissions/pending', {
+        credentials: 'include'
+    }).then(handleResponse);
+};
+
+export const payCommission = (payoutData) => {
+    return fetch('/api/commissions/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payoutData),
+        credentials: 'include'
+    }).then(handleResponse);
+};
+
+export const getMyPendingCommissions = () => {
+    return fetch('/api/commissions/user', {
+        credentials: 'include'
+    }).then(handleResponse);
+};
+
+
+// --- ANALYTICS ---
 export const getAdminAnalytics = () => {
   return fetch('/api/analytics/admin', {
     credentials: 'include'

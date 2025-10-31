@@ -5,22 +5,23 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../../store/authStore';
 import { 
   getDownline, 
-  createSale, 
   getPendingPayoutForUser,
   getUserInventory,
   getHierarchy,
-  getUsersByRole,
   changePassword,
   getPayables,
-  getReceivables,
-  payTransaction,
+  getMyPendingCommissions, // UPDATED
+  // getReceivables, // Dealers have no downline to receive from
+  // payTransaction, // Will be replaced by upload
+  // createSale, // REMOVED
+  // getUsersByRole, // REMOVED
 } from '../../../services/apiService';
 import DashboardHeader from '../../../components/DashboardHeader';
 import HierarchyNode from '../../../components/admin/HierarchyNode';
 import UserFormModal from '../../../components/UserFormModal';
 import ChangePasswordModal from '../../../components/ChangePasswordModal';
-import UplineProductStore from '../../../components/UplineProductStore'; // Renamed/Refactored component
 import BuyFromAdminForm from '../../../components/BuyFromAdminForm'; // IMPORTED
+import UploadProofModal from '../../../components/UploadProofModal'; // IMPORTED
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -38,76 +39,75 @@ export default function DealerDashboard() {
 
   const [inventory, setInventory] = useState([]);
   const [downline, setDownline] = useState([]);
-  const [allFarmers, setAllFarmers] = useState([]);
   const [hierarchy, setHierarchy] = useState(null);
   const [payables, setPayables] = useState([]);
-  const [receivables, setReceivables] = useState({ transactions: [], total: 0 });
   const [analytics, setAnalytics] = useState({ teamSize: 0, totalProfit: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
-  // Form states
-  const [sellProductId, setSellProductId] = useState('');
-  const [sellQuantity, setSellQuantity] = useState(1);
-  const [sellToId, setSellToId] = useState('');
-  
-  const selectedProductInStock = inventory.find(item => item.productId === sellProductId);
+  // --- ADD NEW STATE FOR THE MODAL ---
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState(null);
 
+  // REMOVED sell form states
+  
   const totalAmountDue = payables.reduce((acc, p) => acc + p.totalAmount, 0);
 
   const fetchData = useCallback(async () => {
     if (user) {
+      setIsLoading(true);
       try {
         const [
           inventoryData, 
           downlineData, 
           hierarchyData, 
-          farmersData, 
           payablesData, 
-          receivablesData,
           profitData,
         ] = await Promise.all([
           getUserInventory(),
           getDownline(user.userId),
           getHierarchy(user.userId),
-          getUsersByRole('Farmer'),
           getPayables(),
-          getReceivables(),
-          getPendingPayoutForUser(user.userId),
+          getMyPendingCommissions(), // UPDATED
         ]);
         setInventory(inventoryData);
-        setDownline(downlineData);
+        setDownline(downlineData); // This will be Farmers
         setAnalytics({ 
           teamSize: downlineData.length,
-          totalProfit: profitData.totalProfit || 0
+          totalProfit: profitData.pendingBalance || 0 // Use pendingBalance from new API
         });
         setHierarchy(hierarchyData);
-        setAllFarmers(farmersData);
         setPayables(payablesData);
-        setReceivables(receivablesData);
       } catch (error) {
         toast.error("Could not load all dashboard data.");
       } finally {
-        if(isLoading) setIsLoading(false);
+        setIsLoading(false);
       }
     }
-  }, [user, isLoading]);
+  }, [user]);
 
   useEffect(() => {
     if(user) fetchData();
   }, [user, fetchData]);
 
-  const handlePayTransaction = async (transactionId, sellerName) => {
-    if (window.confirm(`Are you sure you want to complete this payment to ${sellerName}?`)) {
-      try {
-        await payTransaction(transactionId);
-        toast.success('Payment successful!');
-        fetchData();
-      } catch (error) {
-        console.error("Payment failed:", error);
-      }
-    }
+  // --- HANDLER TO OPEN THE UPLOAD MODAL ---
+  const handleOpenUploadModal = (transactionId) => {
+    setSelectedTransactionId(transactionId);
+    setIsProofModalOpen(true);
+  };
+  
+  // --- HANDLER TO CLOSE THE UPLOAD MODAL ---
+  const handleCloseProofModal = () => {
+    setSelectedTransactionId(null);
+    setIsProofModalOpen(false);
+    fetchData(); // Refresh data to show "Uploaded" status
+  };
+
+  // --- Placeholder for Razorpay ---
+  const handlePayNow = (transaction) => {
+    toast(`Initiating payment for ₹${transaction.totalAmount.toFixed(2)}...`, { icon: 'ℹ️' });
+    // Future Razorpay logic will go here
   };
 
   const handleLogout = () => { logout(); router.push('/'); };
@@ -116,17 +116,7 @@ export default function DealerDashboard() {
     if (user && user.role !== 'Dealer') router.push('/'); 
   }, [user, router]);
   
-  const handleSellToFarmer = async (e) => {
-    e.preventDefault();
-    if (!sellProductId || !sellToId || sellQuantity < 1) return toast.error("Please fill all fields for the sale.");
-    if (parseInt(sellQuantity) > (selectedProductInStock?.quantity || 0)) return toast.error(`Not enough stock.`);
-    try {
-      await createSale({ buyerId: sellToId, productId: sellProductId, quantity: parseInt(sellQuantity) });
-      toast.success('Sale to Farmer recorded successfully!');
-      setSellProductId(''); setSellQuantity(1); setSellToId('');
-      fetchData();
-    } catch (error) { console.error(error); }
-  };
+  // REMOVED handleSellToFarmer
 
   const handleSavePassword = async (passwordData) => {
     try {
@@ -158,6 +148,14 @@ export default function DealerDashboard() {
         onSave={handleSavePassword}
       />
 
+      {/* --- RENDER THE UPLOAD MODAL --- */}
+      <UploadProofModal
+        isOpen={isProofModalOpen}
+        onClose={handleCloseProofModal}
+        transactionId={selectedTransactionId}
+        onUploadSuccess={handleCloseProofModal}
+      />
+
       <div className="min-h-screen bg-stone-50">
         <DashboardHeader 
           title="Dealer Dashboard" 
@@ -167,28 +165,24 @@ export default function DealerDashboard() {
         />
         <main className="container mx-auto p-6 space-y-8">
           {/* Analytics Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payouts</h3>
-              <p className="text-4xl font-bold text-red-600 mt-2">₹{receivables.total.toFixed(2)}</p>
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Commissions</h3>
+              <p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.totalProfit.toFixed(2)}</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Profit Generated</h3>
-              <p className="text-4xl font-bold text-green-600 mt-2">₹{analytics.totalProfit.toFixed(2)}</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Due</h3>
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Due (to Admin)</h3>
               <p className="text-4xl font-bold text-orange-600 mt-2">₹{totalAmountDue.toFixed(2)}</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Team Size</h3>
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Team Size (Farmers)</h3>
               <p className="text-4xl font-bold text-teal-600 mt-2">{analytics.teamSize}</p>
             </div>
           </div>
 
           {/* Pending Payments Section (Payables) */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Upline</h2>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Admin</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -197,6 +191,7 @@ export default function DealerDashboard() {
                     <th className="p-3">Product</th>
                     <th className="p-3">Owed To</th>
                     <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-center">Proof Status</th>
                     <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -208,105 +203,48 @@ export default function DealerDashboard() {
                       <td className="p-3">{p.seller.name}</td>
                       <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
                       <td className="p-3 text-center">
-                        <button
-                          onClick={() => handlePayTransaction(p.id, p.seller.name)}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
-                        >
-                          Pay Now
-                        </button>
-                      </td>
+                         {p.paymentProofUrl ? (
+                           <a href={p.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 font-semibold hover:underline">
+                             Uploaded
+                           </a>
+                         ) : (
+                           <span className="text-xs text-gray-500">Not Uploaded</span>
+                         )}
+                       </td>
+                       <td className="p-3 text-center flex justify-center gap-2">
+                         <button
+                           onClick={() => handlePayNow(p)} 
+                           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                           disabled={!!p.paymentProofUrl}
+                         >
+                           Pay Now
+                         </button>
+                         <button
+                           onClick={() => handleOpenUploadModal(p.id)} 
+                           className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                           disabled={!!p.paymentProofUrl}
+                         >
+                           {p.paymentProofUrl ? 'Proof Uploaded' : 'Upload Proof'}
+                         </button>
+                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
+                    <tr><td colSpan="6" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Pending Payouts Section (Receivables) */}
+          {/* Purchase Section */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Owed By</th>
-                    <th className="p-3">Product</th>
-                    <th className="p-3 text-right">Amount</th>
-                    <th className="p-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receivables.transactions.length > 0 ? receivables.transactions.map(t => (
-                    <tr key={t.id} className="border-b">
-                      <td className="p-3">{new Date(t.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3">{t.buyer.name}</td>
-                      <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
-                      <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
-                      <td className="p-3 text-center">
-                        {t.paymentStatus === 'PENDING' ? (
-                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
-                                Pending
-                            </span>
-                        ) : (
-                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
-                                Paid
-                            </span>
-                        )}
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments from your downline.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Purchase Section - UPDATED */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              <div className="flex flex-col gap-8">
-                <h2 className="text-2xl font-semibold text-gray-700">Purchase Options</h2>
-                {/* Option 1: Buy from direct upline (Sub-Distributor) */}
-                <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
-              </div>
-              <div className="flex flex-col gap-8">
-                <h2 className="text-2xl font-semibold text-gray-700 text-transparent lg:text-gray-700">.</h2> {/* Spacer for alignment */}
-                {/* Option 2: Buy directly from Admin */}
-                <BuyFromAdminForm onPurchaseSuccess={fetchData} /> 
-              </div>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Purchase Directly from Admin</h2>
+            <BuyFromAdminForm onPurchaseSuccess={fetchData} />
           </div>
 
           {/* Sell and Inventory Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="flex flex-col gap-8">
-              <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Farmer</h2>
-                <form onSubmit={handleSellToFarmer} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium">Product</label>
-                    <select value={sellProductId} onChange={(e) => setSellProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                      <option value="">Select a product</option>
-                      {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Quantity</label>
-                    <input type="number" value={sellQuantity} onChange={(e) => setSellQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductInStock?.quantity || 0} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium">Sell To</label>
-                    <select value={sellToId} onChange={(e) => setSellToId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                        <option value="">Select a Farmer</option>
-                        {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
-                </form>
-              </div>
-
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Farmer</h2>
                 <p className="text-gray-600 mb-4">Click the button below to add a new farmer to your downline.</p>
@@ -328,7 +266,7 @@ export default function DealerDashboard() {
                      <tbody>
                        {inventory.length > 0 ? inventory.map(item => (
                            <tr key={item.id} className="border-b"><td className="p-3">{item.product.name}</td><td className="p-3 font-medium">{item.quantity} Units</td></tr>
-                       )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty. Buy from your upline to add stock.</td></tr>}
+                       )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty. Buy from Admin to add stock.</td></tr>}
                      </tbody>
                    </table>
                  </div>

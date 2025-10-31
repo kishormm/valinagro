@@ -29,46 +29,48 @@ export async function GET() {
       return NextResponse.json({ error: 'System error: Admin account not found.' }, { status: 500 });
     }
 
-    // 1. Get all transactions where Admin was the seller
+    // --- NEW PROFIT LOGIC ---
+
+    // 1. Get all PAID transactions where Admin was the seller
     const adminSales = await prisma.transaction.findMany({
-      where: { sellerId: adminUser.id },
-      include: {
-        buyer: { select: { role: true } },
+      where: { 
+        sellerId: adminUser.id,
+        paymentStatus: 'PAID' // Only count paid transactions
       },
     });
 
-    // 2. Calculate stats
-    let totalAdminProfit = 0;
-    let totalUnitsSold = 0;
-    // UPDATED to include all possible buyer roles
-    const profitByRole = {
-      Franchise: 0,
-      Distributor: 0,
-      SubDistributor: 0,
-      Dealer: 0,
-      Farmer: 0
-    };
+    // 2. Get all PAID commissions that the Admin has paid out
+    const paidCommissions = await prisma.commission.findMany({
+        where: {
+            status: 'PAID'
+        }
+    });
 
-    for (const sale of adminSales) {
-      // For Admin, profit is the total sale amount since their cost is zero
-      totalAdminProfit += sale.totalAmount;
-      totalUnitsSold += sale.quantity;
+    // 3. Get total active users (excluding the Admin)
+    const activeUsersCount = await prisma.user.count({
+        where: { role: { not: 'Admin' } }
+    });
 
-      // Add to the specific role's profit total
-      if (profitByRole.hasOwnProperty(sale.buyer.role)) {
-        profitByRole[sale.buyer.role] += sale.totalAmount;
-      }
-    }
+    // --- CALCULATIONS ---
+
+    // Total Revenue = Sum of all money received from paid sales
+    const totalRevenue = adminSales.reduce((acc, sale) => acc + sale.totalAmount, 0);
+
+    // Total Cost = Sum of all commissions paid out
+    const totalCommissionPaid = paidCommissions.reduce((acc, comm) => acc + comm.amount, 0);
+
+    // Net Profit = Revenue - Costs
+    const totalAdminProfit = totalRevenue - totalCommissionPaid;
+
+    // Total Units Sold by Admin
+    const totalUnitsSold = adminSales.reduce((acc, sale) => acc + sale.quantity, 0);
     
-    // 3. Get total active users
-    const activeUsersCount = await prisma.user.count();
 
-    // 4. Return the aggregated data in a single object
+    // 4. Return the aggregated data
     return NextResponse.json({
       totalAdminProfit,
       totalUnitsSold,
       activeUsersCount,
-      profitByRole,
     });
 
   } catch (error) {

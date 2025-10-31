@@ -1,3 +1,4 @@
+require('dotenv').config(); // <-- ADD THIS LINE
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
@@ -38,4 +39,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

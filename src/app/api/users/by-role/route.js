@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 export const dynamic = 'force-dynamic';
+
 // Helper function to get the logged-in user
 async function getLoggedInUser() {
   const token = cookies().get('token')?.value;
@@ -56,6 +57,7 @@ export async function GET(request) {
         role: true,
         mobile: true,
         email: true,
+        isMember: true, // <-- THIS LINE IS ADDED
         upline: {
             select: {
                 name: true,
@@ -75,4 +77,3 @@ export async function GET(request) {
     return NextResponse.json({ error: 'An internal server error occurred.' }, { status: 500 });
   }
 }
-

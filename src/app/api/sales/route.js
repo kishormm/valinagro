@@ -1,3 +1,5 @@
+// src/app/api/sales/route.js
+
 import prisma from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -11,13 +13,14 @@ async function getLoggedInUser() {
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    return payload;
+    // Fetch full user data needed for Farmer purchase logic
+    return await prisma.user.findUnique({ where: { id: payload.id } });
   } catch {
     return null;
   }
 }
 
-// GET function (for admin reports)
+// GET function (for admin reports) - Remains unchanged
 export async function GET() {
   try {
     const loggedInUser = await getLoggedInUser();
@@ -39,120 +42,82 @@ export async function GET() {
   }
 }
 
-// POST function (for creating sales) - CORRECTED LOGIC
+// POST function - SIMPLIFIED: Only handles Farmer buying from Dealer
 export async function POST(request) {
   try {
-    const loggedInUser = await getLoggedInUser();
-    if (!loggedInUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const buyer = await getLoggedInUser(); // The logged-in user is the buyer
+
+    // This endpoint is now ONLY for Farmers buying from their Dealer
+    if (!buyer || buyer.role !== 'Farmer') {
+      return NextResponse.json({ error: 'Unauthorized or invalid role for this action.' }, { status: 403 });
+    }
+    if (!buyer.uplineId) {
+        return NextResponse.json({ error: 'Your account is not assigned to a dealer.' }, { status: 400 });
     }
 
     const body = await request.json();
     const { productId, quantity } = body;
-    
-    let sellerId;
-    let buyerId;
-    let stockHolderId; // The user whose inventory we check and decrement
+    const purchaseQuantity = parseInt(quantity, 10);
 
-    // --- THIS IS THE CORRECTED LOGIC ---
-    if (loggedInUser.role === 'Farmer') {
-      // If a Farmer is "creating a sale", they are actually buying from their upline.
-      if (!loggedInUser.uplineId) {
-        return NextResponse.json({ error: 'Your account is not assigned to a dealer.' }, { status: 400 });
-      }
-      sellerId = loggedInUser.uplineId;
-      buyerId = loggedInUser.id;
-      stockHolderId = sellerId; // We check the dealer's stock
-    } 
-    else {
-      // For all other roles (Franchise, Distributor, etc.), they sell from their OWN stock.
-      sellerId = loggedInUser.id;
-      buyerId = body.buyerId;
-      stockHolderId = sellerId; // The seller is the one whose stock we check.
-    }
-    // --- END OF CORRECTION ---
-
-    if (!buyerId) {
-        return NextResponse.json({ error: 'Buyer could not be identified for this transaction.' }, { status: 400 });
+    if (!productId || isNaN(purchaseQuantity) || purchaseQuantity <= 0) {
+        return NextResponse.json({ error: 'Invalid product or quantity.' }, { status: 400 });
     }
 
-    const [seller, buyer, product, stockHolderInventory] = await Promise.all([
-      prisma.user.findUnique({ where: { id: sellerId } }),
-      prisma.user.findUnique({ where: { id: buyerId } }),
-      prisma.product.findUnique({ where: { id: productId } }),
-      prisma.userInventory.findUnique({
-        where: { userId_productId: { userId: stockHolderId, productId: productId } },
-      }),
-    ]);
-    
-    if (!seller || !buyer || !product) {
-      return NextResponse.json({ error: 'Invalid user or product.' }, { status: 400 });
-    }
-    if (!stockHolderInventory || stockHolderInventory.quantity < quantity) {
-      return NextResponse.json({ error: `The seller has insufficient stock for ${product.name}.` }, { status: 400 });
-    }
+    const sellerId = buyer.uplineId; // The seller is always the Farmer's upline (Dealer)
+    const buyerId = buyer.id;
 
-    // --- Price and Profit Calculation (This logic is already correct) ---
-    let purchasePrice;
-    let costPrice;
+    await prisma.$transaction(async (tx) => {
+        const [seller, product, sellerInventory] = await Promise.all([
+            tx.user.findUnique({ where: { id: sellerId } }),
+            tx.product.findUnique({ where: { id: productId } }),
+            tx.userInventory.findUnique({
+                where: { userId_productId: { userId: sellerId, productId: productId } },
+            }),
+        ]);
 
-    switch (seller.role) {
-      case 'Admin': costPrice = 0; break;
-      case 'Franchise': costPrice = product.franchisePrice; break;
-      case 'Distributor': costPrice = product.distributorPrice; break;
-      case 'SubDistributor': costPrice = product.subDistributorPrice; break;
-      case 'Dealer': costPrice = product.dealerPrice; break;
-      default: return NextResponse.json({ error: 'Invalid seller role.' }, { status: 400 });
-    }
+        if (!seller || seller.role !== 'Dealer') {
+             throw new Error('Assigned dealer not found or invalid.');
+        }
+        if (!product || !product.isActive) {
+             throw new Error('Product not found or is inactive.');
+        }
+        if (!sellerInventory || sellerInventory.quantity < purchaseQuantity) {
+            throw new Error(`Your dealer has insufficient stock for ${product.name}.`);
+        }
 
-    switch (buyer.role) {
-      case 'Franchise': purchasePrice = product.franchisePrice; break;
-      case 'Distributor': purchasePrice = product.distributorPrice; break;
-      case 'SubDistributor': purchasePrice = product.subDistributorPrice; break;
-      case 'Dealer': purchasePrice = product.dealerPrice; break;
-      case 'Farmer': purchasePrice = product.farmerPrice; break;
-      default: return NextResponse.json({ error: 'Invalid buyer role.' }, { status: 400 });
-    }
+        // Price and Profit Calculation
+        const purchasePrice = product.farmerPrice; // Farmer always pays Farmer price
+        const costPrice = product.dealerPrice;     // Dealer's cost is Dealer price
+        const totalAmount = purchasePrice * purchaseQuantity;
+        const profit = (purchasePrice - costPrice) * purchaseQuantity;
 
-    const totalAmount = purchasePrice * quantity;
-    const profit = (purchasePrice - costPrice) * quantity;
-
-    // --- Database Transaction ---
-    const newTransaction = await prisma.$transaction(async (tx) => {
-      // This now correctly decrements the seller's (stockHolder's) inventory
-      await tx.userInventory.update({
-        where: { id: stockHolderInventory.id },
-        data: { quantity: { decrement: quantity } },
-      });
-
-      if (buyer.role !== 'Farmer') {
-        await tx.userInventory.upsert({
-          where: { userId_productId: { userId: buyerId, productId: productId } },
-          update: { quantity: { increment: quantity } },
-          create: { userId: buyerId, productId: productId, quantity: quantity },
+        // 1. Decrement Dealer's inventory
+        await tx.userInventory.update({
+            where: { id: sellerInventory.id },
+            data: { quantity: { decrement: purchaseQuantity } },
         });
-      }
 
-      const transaction = await tx.transaction.create({
-        data: { 
-            sellerId, 
-            buyerId, 
-            productId, 
-            quantity, 
-            purchasePrice, 
-            totalAmount, 
-            profit,
-            paymentStatus: 'PENDING'
-        },
-      });
+        // 2. Farmers do not have inventory, so no increment needed.
 
-      return transaction;
+        // 3. Create the transaction record
+        await tx.transaction.create({
+            data: { 
+                sellerId, 
+                buyerId, 
+                productId, 
+                quantity: purchaseQuantity, 
+                purchasePrice, 
+                totalAmount, 
+                profit, // Profit for the Dealer
+                paymentStatus: 'PENDING'
+            },
+        });
     });
 
-    return NextResponse.json(newTransaction, { status: 201 });
+    return NextResponse.json({ message: 'Purchase successful! Awaiting payment proof.' }, { status: 201 });
 
   } catch (error) {
-    console.error("Transaction failed:", error);
-    return NextResponse.json({ error: 'Transaction failed.' }, { status: 500 });
+    console.error("Farmer purchase transaction failed:", error);
+    return NextResponse.json({ error: error.message || 'Transaction failed.' }, { status: 500 });
   }
 }

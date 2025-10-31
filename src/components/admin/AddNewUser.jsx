@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-// --- UPDATED: Import all necessary API functions ---
+// --- CORRECTED IMPORTS ---
 import { 
     addUser, 
     getUsersByRole, 
     getDownline,
     updateUser,
     deleteUser,
-    getUserDetails
-} from '@/services/apiService';
+    getUserDetails,
+    grantMembership // ADDED
+} from '../../services/apiService';
 import toast from 'react-hot-toast';
-import EditUserModal from '@/components/admin/EditUserModal';
+import EditUserModal from './EditUserModal';
 
 // --- Reusable Loader Component ---
 const Loader = ({ size = 'w-8 h-8', color = 'text-white' }) => (
@@ -56,13 +57,16 @@ export default function AddNewUser() {
   );
 }
 
-// --- Sub-component for Creating a User ---
+// --- Sub-component for Creating a User with Validation ---
 function CreateUserForm() {
+    // ... (This entire component remains unchanged)
     const [formData, setFormData] = useState({
-        name: '', role: 'Franchise', mobile: '', email: '', pan: '', aadhar: '',
-        address: '', pincode: '', crops: []
+      name: '', role: 'Franchise', mobile: '', email: '', pan: '', aadhar: '',
+      address: '', pincode: '', crops: []
     });
+    const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
     const [franchises, setFranchises] = useState([]);
     const [distributors, setDistributors] = useState([]);
     const [subDistributors, setSubDistributors] = useState([]);
@@ -82,7 +86,6 @@ function CreateUserForm() {
     }, []);
 
     useEffect(() => { fetchFranchises(); }, [fetchFranchises]);
-
     useEffect(() => {
         if (selectedFranchise) {
             const franchise = franchises.find(f => f.id === selectedFranchise);
@@ -90,7 +93,6 @@ function CreateUserForm() {
         } else setDistributors([]);
         setSelectedDistributor('');
     }, [selectedFranchise, franchises]);
-
     useEffect(() => {
         if (selectedDistributor) {
             const distributor = distributors.find(d => d.id === selectedDistributor);
@@ -98,7 +100,6 @@ function CreateUserForm() {
         } else setSubDistributors([]);
         setSelectedSubDistributor('');
     }, [selectedDistributor, distributors]);
-
     useEffect(() => {
         if (selectedSubDistributor) {
             const subDist = subDistributors.find(sd => sd.id === selectedSubDistributor);
@@ -118,13 +119,29 @@ function CreateUserForm() {
     
     const handleRoleChange = (e) => {
         setFormData({ name: '', role: e.target.value, mobile: '', email: '', pan: '', aadhar: '', address: '', pincode: '', crops: [] });
+        setErrors({});
         setSelectedFranchise(''); setSelectedDistributor(''); setSelectedSubDistributor(''); setSelectedDealer('');
+    };
+
+    const validateForm = () => {
+        const newErrors = {};
+        if (!formData.name.trim()) newErrors.name = "Name is required.";
+        if (!formData.mobile.trim()) newErrors.mobile = "Mobile number is required.";
+        else if (!/^\d{10}$/.test(formData.mobile)) newErrors.mobile = "Mobile number must be 10 digits.";
+        if (formData.email && !/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = "Please enter a valid email address.";
+        if (formData.aadhar && !/^\d{12}$/.test(formData.aadhar)) newErrors.aadhar = "Aadhar number must be 12 digits.";
+        if (formData.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.pan.toUpperCase())) newErrors.pan = "Please enter a valid PAN card number (e.g., ABCDE1234F).";
+        if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) newErrors.pincode = "Pincode must be 6 digits.";
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.name.trim()) return toast.error('Please enter a name.');
-
+        if (!validateForm()) {
+            toast.error("Please fix the errors before submitting.");
+            return;
+        }
         let uplineId;
         switch(formData.role) {
             case 'Distributor': uplineId = selectedFranchise; break;
@@ -132,19 +149,18 @@ function CreateUserForm() {
             case 'Dealer': uplineId = selectedSubDistributor; break;
             case 'Farmer': uplineId = selectedDealer; break;
         }
-
         const finalData = { ...formData };
         if (formData.role !== 'Franchise') {
             if (!uplineId) return toast.error(`Please select an upline for the new ${formData.role}.`);
             finalData.uplineId = uplineId;
         }
-
         setIsSubmitting(true);
         try {
             const createdUser = await addUser(finalData);
             toast.success(`User "${createdUser.name}" created!\nID: ${createdUser.userId}\nPassword: ${createdUser.rawPassword}`, { duration: 8000 });
             if (formData.role === 'Franchise') fetchFranchises();
             setFormData({ name: '', role: 'Franchise', mobile: '', email: '', pan: '', aadhar: '', address: '', pincode: '', crops: [] });
+            setErrors({});
             setSelectedFranchise('');
         } catch (error) {
             console.error("Failed to create user:", error);
@@ -203,15 +219,37 @@ function CreateUserForm() {
                     </div>
                 )}
             </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-                <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Full Name" required className="p-3 border rounded-md" />
-                <input name="mobile" value={formData.mobile} onChange={handleInputChange} placeholder="Mobile Number" className="p-3 border rounded-md" />
-                <input name="email" value={formData.email} type="email" onChange={handleInputChange} placeholder="Email ID" className="p-3 border rounded-md" />
-                <input name="pan" value={formData.pan} onChange={handleInputChange} placeholder="PAN Card Number" className="p-3 border rounded-md" />
-                <input name="aadhar" value={formData.aadhar} onChange={handleInputChange} placeholder="Aadhar Number" className="p-3 border rounded-md" />
-                <input name="pincode" value={formData.pincode} onChange={handleInputChange} placeholder="Pincode" className="p-3 border rounded-md" />
-                <textarea name="address" value={formData.address} onChange={handleInputChange} placeholder="Full Address" className="p-3 border rounded-md md:col-span-2" rows="3"></textarea>
+                <div>
+                    <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Full Name *" className={`p-3 border rounded-md w-full ${errors.name ? 'border-red-500' : 'border-gray-300'}`} />
+                    {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                </div>
+                <div>
+                    <input name="mobile" value={formData.mobile} onChange={handleInputChange} placeholder="Mobile Number *" className={`p-3 border rounded-md w-full ${errors.mobile ? 'border-red-500' : 'border-gray-300'}`} />
+                    {errors.mobile && <p className="text-red-500 text-sm mt-1">{errors.mobile}</p>}
+                </div>
+                <div>
+                    <input name="email" value={formData.email} type="email" onChange={handleInputChange} placeholder="Email ID" className={`p-3 border rounded-md w-full ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />
+                    {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                </div>
+                <div>
+                    <input name="pan" value={formData.pan} onChange={handleInputChange} placeholder="PAN Card Number" className={`p-3 border rounded-md w-full ${errors.pan ? 'border-red-500' : 'border-gray-300'}`} />
+                    {errors.pan && <p className="text-red-500 text-sm mt-1">{errors.pan}</p>}
+                </div>
+                <div>
+                    <input name="aadhar" value={formData.aadhar} onChange={handleInputChange} placeholder="Aadhar Number" className={`p-3 border rounded-md w-full ${errors.aadhar ? 'border-red-500' : 'border-gray-300'}`} />
+                    {errors.aadhar && <p className="text-red-500 text-sm mt-1">{errors.aadhar}</p>}
+                </div>
+                <div>
+                    <input name="pincode" value={formData.pincode} onChange={handleInputChange} placeholder="Pincode" className={`p-3 border rounded-md w-full ${errors.pincode ? 'border-red-500' : 'border-gray-300'}`} />
+                    {errors.pincode && <p className="text-red-500 text-sm mt-1">{errors.pincode}</p>}
+                </div>
+                <div className="md:col-span-2">
+                    <textarea name="address" value={formData.address} onChange={handleInputChange} placeholder="Full Address" className="p-3 border rounded-md w-full border-gray-300" rows="3"></textarea>
+                </div>
             </div>
+            
             <div className="pt-4 border-t">
                 <label className="block text-gray-700 font-semibold mb-2">Which crops do they purchase products for?</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -230,16 +268,16 @@ function CreateUserForm() {
     );
 }
 
-// --- Sub-component for Viewing and Managing Users ---
+
+// --- Sub-component for Viewing and Managing Users (UPDATED) ---
 function UserManagementDashboard() {
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
-    
     const [editingUser, setEditingUser] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-
+    const [submittingId, setSubmittingId] = useState(null); // For membership button
     const roles = ['All', 'Franchise', 'Distributor', 'SubDistributor', 'Dealer', 'Farmer'];
 
     const fetchUsers = useCallback(async () => {
@@ -247,16 +285,11 @@ function UserManagementDashboard() {
         try {
             const data = await getUsersByRole(filter);
             setUsers(data);
-        } catch (error) {
-            toast.error("Could not load users.");
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (error) { toast.error("Could not load users."); }
+        finally { setIsLoading(false); }
     }, [filter]);
 
-    useEffect(() => {
-        fetchUsers();
-    }, [fetchUsers]);
+    useEffect(() => { fetchUsers(); }, [fetchUsers]);
     
     const handleEdit = (user) => {
         setEditingUser(user);
@@ -270,9 +303,7 @@ function UserManagementDashboard() {
             setIsModalOpen(false);
             setEditingUser(null);
             fetchUsers();
-        } catch (error) {
-            console.error("Failed to update user:", error);
-        }
+        } catch (error) { console.error("Failed to update user:", error); }
     };
     
     const handleDelete = async (user) => {
@@ -281,8 +312,23 @@ function UserManagementDashboard() {
                 await deleteUser(user.id);
                 toast.success("User deleted successfully.");
                 fetchUsers();
+            } catch (error) { console.error("Failed to delete user:", error); }
+        }
+    };
+
+    // --- NEW: Handle Grant Membership ---
+    const handleGrantMembership = async (user) => {
+        if (window.confirm(`Are you sure you want to grant membership to ${user.name}? This user will now be considered an active member.`)) {
+            setSubmittingId(user.id);
+            try {
+                await grantMembership(user.id);
+                toast.success("Membership granted!");
+                fetchUsers(); // Refresh the list to show new status
             } catch (error) {
-                console.error("Failed to delete user:", error);
+                console.error("Failed to grant membership:", error);
+                // Error toast is handled by apiService
+            } finally {
+                setSubmittingId(null);
             }
         }
     };
@@ -323,9 +369,7 @@ function UserManagementDashboard() {
             </div>
 
             {isLoading ? (
-                <div className="flex justify-center items-center h-64">
-                    <Loader color="text-green-600" />
-                </div>
+                <div className="flex justify-center items-center h-64"><Loader color="text-green-600" /></div>
             ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -335,7 +379,7 @@ function UserManagementDashboard() {
                                 <th className="p-3">User ID</th>
                                 <th className="p-3">Role</th>
                                 <th className="p-3">Upline</th>
-                                <th className="p-3">Contact</th>
+                                <th className="p-3">Membership</th> {/* NEW COLUMN */}
                                 <th className="p-3">Actions</th>
                             </tr>
                         </thead>
@@ -346,10 +390,33 @@ function UserManagementDashboard() {
                                     <td className="p-3">{user.userId}</td>
                                     <td className="p-3">{user.role}</td>
                                     <td className="p-3">{user.upline?.name || 'Admin'}</td>
-                                    <td className="p-3">{user.mobile || user.email || 'N/A'}</td>
-                                    <td className="p-3 flex gap-2">
+                                    {/* NEW MEMBERSHIP CELL */}
+                                    <td className="p-3">
+                                        {user.role === 'Admin' || user.role === 'Farmer' ? (
+                                             <span className="text-xs text-gray-500">N/A</span>
+                                        ) : user.isMember ? (
+                                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+                                                Member
+                                            </span>
+                                        ) : (
+                                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
+                                                Not Member
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="p-3 flex flex-wrap gap-2">
                                         <button onClick={() => handleEdit(user)} className="font-medium text-blue-600 hover:text-blue-800">Edit</button>
                                         <button onClick={() => handleDelete(user)} className="font-medium text-red-600 hover:text-red-800">Delete</button>
+                                        {/* NEW GRANT MEMBERSHIP BUTTON */}
+                                        {user.role !== 'Admin' && user.role !== 'Farmer' && !user.isMember && (
+                                            <button 
+                                                onClick={() => handleGrantMembership(user)}
+                                                disabled={submittingId === user.id}
+                                                className="font-medium text-green-600 hover:text-green-800 disabled:text-gray-400"
+                                            >
+                                                {submittingId === user.id ? 'Granting...' : 'Grant Membership'}
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             )) : (
@@ -363,8 +430,9 @@ function UserManagementDashboard() {
     );
 }
 
-// --- NEW: Sub-component for Searching and Viewing a User's Details ---
+// --- Sub-component for Searching and Viewing a User's Details ---
 function ViewUserDetails() {
+    // ... (This entire component remains unchanged)
     const [searchInput, setSearchInput] = useState('');
     const [userDetails, setUserDetails] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -373,7 +441,6 @@ function ViewUserDetails() {
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!searchInput.trim()) return;
-
         setIsLoading(true);
         setError('');
         setUserDetails(null);
@@ -416,7 +483,7 @@ function ViewUserDetails() {
                         <div className="md:col-span-2"><p className="text-sm text-gray-500">Address</p><p>{userDetails.address || 'N/A'}, {userDetails.pincode || ''}</p></div>
                     </div>
 
-                     <div className="md:col-span-2 pt-4 border-t">
+                    <div className="md:col-span-2 pt-4 border-t">
                         <p className="font-semibold text-gray-700 mb-2">Crops:</p>
                         {userDetails.crops && userDetails.crops.length > 0 ? (
                             <ul className="list-disc list-inside flex flex-wrap gap-x-6">
@@ -429,4 +496,3 @@ function ViewUserDetails() {
         </div>
     );
 }
-

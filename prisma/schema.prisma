@@ -10,8 +10,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NEW ENUM to define payment statuses
 enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+// <-- ADDED NEW ENUM -->
+enum CommissionStatus {
   PENDING
   PAID
 }
@@ -43,10 +48,12 @@ model User {
   address              String?
   pincode              String?
   crops                String[]      @default([])
+  isMember             Boolean       @default(false)
   payouts              Payout[]
   inventory            UserInventory[]
   transactionsAsSeller Transaction[] @relation("SellerTransactions")
   transactionsAsBuyer  Transaction[] @relation("BuyerTransactions")
+  commissions          Commission[] // <-- ADDED RELATION
 }
 
 model Product {
@@ -76,21 +83,22 @@ model UserInventory {
 }
 
 model Transaction {
-  id            String      @id @default(cuid())
-  quantity      Int
-  purchasePrice Float
-  totalAmount   Float
-  profit        Float
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt // <-- ADD THIS LINE
-
-  product       Product     @relation(fields: [productId], references: [id])
-  productId     String
-  seller        User        @relation("SellerTransactions", fields: [sellerId], references: [id])
-  sellerId      String
-  buyer         User        @relation("BuyerTransactions", fields: [buyerId], references: [id])
-  buyerId       String
-  paymentStatus PaymentStatus @default(PENDING)
+  id              String       @id @default(cuid())
+  quantity        Int
+  purchasePrice   Float
+  totalAmount     Float
+  profit          Float // This 'profit' is for the direct seller (e.g., Dealer selling to Farmer)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentProofUrl String?
+  product         Product      @relation(fields: [productId], references: [id])
+  productId       String
+  seller          User         @relation("SellerTransactions", fields: [sellerId], references: [id])
+  sellerId        String
+  buyer           User         @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  buyerId         String
+  commissions     Commission[] // <-- ADDED RELATION
 }
 
 model Payout {
@@ -99,4 +107,23 @@ model Payout {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
   userId    String
+}
+
+// <-- ADDED NEW MODEL -->
+model Commission {
+  id            String           @id @default(cuid())
+  amount        Float
+  status        CommissionStatus @default(PENDING)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  payoutNotes   String?          // Optional notes for the admin
+
+  user          User             @relation(fields: [userId], references: [id])
+  userId        String           // The user who EARNED this commission
+  
+  transaction   Transaction      @relation(fields: [transactionId], references: [id])
+  transactionId String           // The sale that generated this commission
+
+  @@index([userId])
+  @@index([transactionId])
 }

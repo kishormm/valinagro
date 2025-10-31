@@ -5,22 +5,23 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { 
   getDownline, 
-  createSale, 
   getPendingPayoutForUser,
   getUserInventory,
   getHierarchy,
-  getUsersByRole,
   changePassword,
   getPayables,
-  getReceivables,
-  payTransaction,
+  getMyPendingCommissions, // UPDATED
+  // createSale, // REMOVED
+  // getUsersByRole, // REMOVED
+  // getReceivables, // REMOVED
+  // payTransaction, // REMOVED
 } from '@/services/apiService';
 import DashboardHeader from '@/components/DashboardHeader';
 import HierarchyNode from '@/components/admin/HierarchyNode';
 import UserFormModal from '@/components/UserFormModal';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
-import UplineProductStore from '@/components/UplineProductStore'; // CORRECTED IMPORT
 import BuyFromAdminForm from '@/components/BuyFromAdminForm';
+import UploadProofModal from '@/components/UploadProofModal'; // IMPORTED
 import toast from 'react-hot-toast';
 
 // Simple inline SVG loader
@@ -39,80 +40,75 @@ export default function DistributorDashboard() {
 
   const [inventory, setInventory] = useState([]);
   const [downline, setDownline] = useState([]);
-  const [allFarmers, setAllFarmers] = useState([]); 
   const [hierarchy, setHierarchy] = useState(null);
   const [payables, setPayables] = useState([]);
-  const [receivables, setReceivables] = useState({ transactions: [], total: 0 });
   const [analytics, setAnalytics] = useState({ teamSize: 0, totalProfit: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [isRecruitModalOpen, setIsRecruitModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
-  // Form states
-  const [sellToSubDistProductId, setSellToSubDistProductId] = useState('');
-  const [sellToSubDistQuantity, setSellToSubDistQuantity] = useState(1);
-  const [sellToSubDistId, setSellToSubDistId] = useState('');
-  const [sellToFarmerProductId, setSellToFarmerProductId] = useState('');
-  const [sellToFarmerQuantity, setSellToFarmerQuantity] = useState(1);
-  const [sellToFarmerId, setSellToFarmerId] = useState('');
-
-  const selectedProductForSubDist = inventory.find(item => item.productId === sellToSubDistProductId);
-  const selectedProductForFarmer = inventory.find(item => item.productId === sellToFarmerProductId);
+  // --- ADD NEW STATE FOR THE MODAL ---
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState(null);
+  
+  // Form states removed
 
   const totalAmountDue = payables.reduce((acc, p) => acc + p.totalAmount, 0);
 
   const fetchData = useCallback(async () => {
     if (user) {
+      setIsLoading(true);
       try {
         const [
             inventoryData, 
             downlineData, 
             hierarchyData, 
-            farmersData, 
             payablesData, 
-            receivablesData,
             profitData,
         ] = await Promise.all([
           getUserInventory(),
           getDownline(user.userId),
           getHierarchy(user.userId),
-          getUsersByRole('Farmer'),
           getPayables(),
-          getReceivables(),
-          getPendingPayoutForUser(user.userId),
+          getMyPendingCommissions(), // UPDATED
         ]);
         setInventory(inventoryData);
         setDownline(downlineData);
         setAnalytics({ 
             teamSize: downlineData.length,
-            totalProfit: profitData.totalProfit || 0
+            totalProfit: profitData.pendingBalance || 0 // Use pendingBalance from new API
         });
         setHierarchy(hierarchyData);
-        setAllFarmers(farmersData);
         setPayables(payablesData);
-        setReceivables(receivablesData);
       } catch (error) {
         toast.error("Could not load all dashboard data.");
       } finally {
-        if(isLoading) setIsLoading(false);
+        setIsLoading(false);
       }
     }
-  }, [user, isLoading]);
+  }, [user]);
 
   useEffect(() => {
     if(user) fetchData();
   }, [user, fetchData]);
 
-  const handlePayTransaction = async (transactionId, sellerName) => {
-    if (window.confirm(`Are you sure you want to complete this payment to ${sellerName}?`)) {
-      try {
-        await payTransaction(transactionId);
-        toast.success('Payment successful!');
-        fetchData();
-      } catch (error) {
-        console.error("Payment failed:", error);
-      }
-    }
+  // --- HANDLER TO OPEN THE UPLOAD MODAL ---
+  const handleOpenUploadModal = (transactionId) => {
+    setSelectedTransactionId(transactionId);
+    setIsProofModalOpen(true);
+  };
+  
+  // --- HANDLER TO CLOSE THE UPLOAD MODAL ---
+  const handleCloseProofModal = () => {
+    setSelectedTransactionId(null);
+    setIsProofModalOpen(false);
+    fetchData(); // Refresh data to show "Uploaded" status
+  };
+
+  // --- Placeholder for Razorpay ---
+  const handlePayNow = (transaction) => {
+    toast(`Initiating payment for ₹${transaction.totalAmount.toFixed(2)}...`, { icon: 'ℹ️' });
+    // Future Razorpay logic will go here
   };
 
   const handleLogout = () => { logout(); router.push('/'); };
@@ -121,29 +117,7 @@ export default function DistributorDashboard() {
     if (user && user.role !== 'Distributor') router.push('/'); 
   }, [user, router]);
  
-  const handleSellToSubDistributor = async (e) => {
-    e.preventDefault();
-    if (!sellToSubDistProductId || !sellToSubDistId || sellToSubDistQuantity < 1) return toast.error("Please fill all fields.");
-    if (parseInt(sellToSubDistQuantity) > (selectedProductForSubDist?.quantity || 0)) return toast.error(`Not enough stock.`);
-    try {
-      await createSale({ buyerId: sellToSubDistId, productId: sellToSubDistProductId, quantity: parseInt(sellToSubDistQuantity) });
-      toast.success('Sale to Sub-Distributor recorded successfully!');
-      setSellToSubDistProductId(''); setSellToSubDistQuantity(1); setSellToSubDistId('');
-      fetchData();
-    } catch (error) { console.error(error); }
-  };
- 
-  const handleSellToFarmer = async (e) => {
-    e.preventDefault();
-    if (!sellToFarmerProductId || !sellToFarmerId || sellToFarmerQuantity < 1) return toast.error("Please fill all fields.");
-    if (parseInt(sellToFarmerQuantity) > (selectedProductForFarmer?.quantity || 0)) return toast.error(`Not enough stock.`);
-    try {
-      await createSale({ buyerId: sellToFarmerId, productId: sellToFarmerProductId, quantity: parseInt(sellToFarmerQuantity) });
-      toast.success('Sale to Farmer recorded successfully!');
-      setSellToFarmerProductId(''); setSellToFarmerQuantity(1); setSellToFarmerId('');
-      fetchData();
-    } catch (error) { console.error(error); }
-  };
+  // Removed sales handlers
 
   const handleSavePassword = async (passwordData) => {
     try {
@@ -164,7 +138,7 @@ export default function DistributorDashboard() {
       <UserFormModal
         isOpen={isRecruitModalOpen}
         onClose={() => setIsRecruitModalOpen(false)}
-        onUserAdded={fetchData}
+        onUserAdded={fetchData} 
         uplineId={user.id}
         roleToCreate="SubDistributor"
       />
@@ -173,6 +147,14 @@ export default function DistributorDashboard() {
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
         onSave={handleSavePassword}
+      />
+
+      {/* --- RENDER THE UPLOAD MODAL --- */}
+      <UploadProofModal
+        isOpen={isProofModalOpen}
+        onClose={handleCloseProofModal}
+        transactionId={selectedTransactionId}
+        onUploadSuccess={handleCloseProofModal}
       />
 
       <div className="min-h-screen bg-stone-50">
@@ -184,17 +166,13 @@ export default function DistributorDashboard() {
         />
         <main className="container mx-auto p-6 space-y-8">
           {/* Analytics Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Payouts</h3>
-              <p className="text-4xl font-bold text-red-600 mt-2">₹{receivables.total.toFixed(2)}</p>
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Pending Commissions</h3>
+              <p className="text-4xl font-bold text-red-600 mt-2">₹{analytics.totalProfit.toFixed(2)}</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Profit Generated</h3>
-              <p className="text-4xl font-bold text-green-600 mt-2">₹{analytics.totalProfit.toFixed(2)}</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Due</h3>
+              <h3 className="text-stone-500 text-sm font-semibold uppercase">Total Amount Due (to Admin)</h3>
               <p className="text-4xl font-bold text-orange-600 mt-2">₹{totalAmountDue.toFixed(2)}</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
@@ -205,7 +183,7 @@ export default function DistributorDashboard() {
 
           {/* Pending Payments Section (Payables) */}
           <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Upline</h2>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments to Admin</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -214,6 +192,7 @@ export default function DistributorDashboard() {
                     <th className="p-3">Product</th>
                     <th className="p-3">Owed To</th>
                     <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-center">Proof Status</th>
                     <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -225,57 +204,34 @@ export default function DistributorDashboard() {
                       <td className="p-3">{p.seller.name}</td>
                       <td className="p-3 font-bold text-right">₹{p.totalAmount.toFixed(2)}</td>
                       <td className="p-3 text-center">
-                        <button
-                          onClick={() => handlePayTransaction(p.id, p.seller.name)}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700"
-                        >
-                          Pay Now
-                        </button>
-                      </td>
+                         {p.paymentProofUrl ? (
+                           <a href={p.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 font-semibold hover:underline">
+                             Uploaded
+                           </a>
+                         ) : (
+                           <span className="text-xs text-gray-500">Not Uploaded</span>
+                         )}
+                       </td>
+                       {/* UPDATED ACTIONS CELL */}
+                       <td className="p-3 text-center flex justify-center gap-2">
+                         <button
+                           onClick={() => handlePayNow(p)} 
+                           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                           disabled={!!p.paymentProofUrl}
+                         >
+                           Pay Now
+                         </button>
+                         <button
+                           onClick={() => handleOpenUploadModal(p.id)} 
+                           className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                           disabled={!!p.paymentProofUrl}
+                         >
+                           {p.paymentProofUrl ? 'Proof Uploaded' : 'Upload Proof'}
+                         </button>
+                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Pending Payouts Section (Receivables) */}
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Payments from Downline</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-stone-100 text-stone-600 uppercase text-sm">
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Owed By</th>
-                    <th className="p-3">Product</th>
-                    <th className="p-3 text-right">Amount</th>
-                    <th className="p-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receivables.transactions.length > 0 ? receivables.transactions.map(t => (
-                    <tr key={t.id} className="border-b">
-                      <td className="p-3">{new Date(t.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3">{t.buyer.name}</td>
-                      <td className="p-3 font-medium">{t.product.name} (x{t.quantity})</td>
-                      <td className="p-3 font-bold text-right">₹{t.totalAmount.toFixed(2)}</td>
-                      <td className="p-3 text-center">
-                        {t.paymentStatus === 'PENDING' ? (
-                            <span className="px-3 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
-                                Pending
-                            </span>
-                        ) : (
-                            <span className="px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
-                                Paid
-                            </span>
-                        )}
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan="5" className="p-4 text-center text-gray-500">No pending or recent payments from your downline.</td></tr>
+                    <tr><td colSpan="6" className="p-4 text-center text-gray-500">You have no pending payments.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -283,71 +239,14 @@ export default function DistributorDashboard() {
           </div>
           
           {/* Purchase Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              <div className="flex flex-col gap-8">
-                <h2 className="text-2xl font-semibold text-gray-700">Purchase Options</h2>
-                {/* CORRECTED to use UplineProductStore */}
-                <UplineProductStore userRole={user.role} onPurchaseSuccess={fetchData} />
-              </div>
-              <div className="flex flex-col gap-8">
-                <h2 className="text-2xl font-semibold text-gray-700 text-transparent lg:text-gray-700">.</h2>
-                <BuyFromAdminForm onPurchaseSuccess={fetchData} />
-              </div>
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Purchase Directly from Admin</h2>
+            <BuyFromAdminForm onPurchaseSuccess={fetchData} />
           </div>
 
           {/* Sell and Inventory Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             <div className="flex flex-col gap-8">
-              <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell to Sub-Distributor</h2>
-                <form onSubmit={handleSellToSubDistributor} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium">Product</label>
-                        <select value={sellToSubDistProductId} onChange={(e) => setSellToSubDistProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                        <option value="">Select a product</option>
-                        {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Quantity</label>
-                        <input type="number" value={sellToSubDistQuantity} onChange={(e) => setSellToSubDistQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForSubDist?.quantity || 0} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Sell To</label>
-                        <select value={sellToSubDistId} onChange={(e) => setSellToSubDistId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                            <option value="">Select Sub-Distributor</option>
-                            {downline.map(d => <option key={d.id} value={d.id}>{d.name} ({d.userId})</option>)}
-                        </select>
-                    </div>
-                    <button type="submit" className="w-full mt-2 py-3 bg-green-600 text-white font-bold rounded-md hover:bg-green-700">Complete Sale</button>
-                </form>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sell Directly to Farmer</h2>
-                <form onSubmit={handleSellToFarmer} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium">Product</label>
-                        <select value={sellToFarmerProductId} onChange={(e) => setSellToFarmerProductId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                        <option value="">Select a product</option>
-                        {inventory.map(item => <option key={item.id} value={item.productId}>{item.product.name} (Your Stock: {item.quantity})</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Quantity</label>
-                        <input type="number" value={sellToFarmerQuantity} onChange={(e) => setSellToFarmerQuantity(e.target.value)} className="w-full mt-1 p-2 border rounded-md" min="1" max={selectedProductForFarmer?.quantity || 0} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Sell To Farmer</label>
-                        <select value={sellToFarmerId} onChange={(e) => setSellToFarmerId(e.target.value)} className="w-full mt-1 p-2 border rounded-md">
-                        <option value="">Select a farmer</option>
-                        {allFarmers.map(f => <option key={f.id} value={f.id}>{f.name} ({f.userId})</option>)}
-                        </select>
-                    </div>
-                    <button type="submit" className="w-full mt-2 py-3 bg-purple-600 text-white font-bold rounded-md hover:bg-purple-700">Complete Farmer Sale</button>
-                </form>
-              </div>
-
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Recruit Sub-Distributor</h2>
                 <p className="text-gray-600 mb-4">Click the button below to add a new sub-distributor to your downline.</p>
@@ -369,14 +268,14 @@ export default function DistributorDashboard() {
                      <tbody>
                        {inventory.length > 0 ? inventory.map(item => (
                            <tr key={item.id} className="border-b"><td className="p-3">{item.product.name}</td><td className="p-3 font-medium">{item.quantity} Units</td></tr>
-                       )) : <tr><td colSpan="2" className="p-3 text-center">Your inventory is empty. Use the forms above to add stock.</td></tr>}
+                       )) : <tr><td colSpan="2" className="p-3 text-center text-gray-500">Your inventory is empty. Use the form above to add stock.</td></tr>}
                      </tbody>
                    </table>
                  </div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">My Team Hierarchy</h2>
-                 <div className="overflow-x-auto max-h-96 pl-2 border-l-2 border-stone-200">
+                 <div className="overflow-y-auto max-h-96 pl-2 border-l-2 border-stone-200">
                   {hierarchy ? (
                     <HierarchyNode user={hierarchy} />
                   ) : (

@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
+import { CommissionStatus } from '@prisma/client'; // <-- 1. IMPORT THE ENUM
 export const dynamic = 'force-dynamic';
 
 // Helper to get logged-in user
@@ -11,7 +12,7 @@ async function getLoggedInUser() {
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    return await prisma.user.findUnique({ where: { id: payload.id } });
+    return payload;
   } catch {
     return null;
   }
@@ -51,19 +52,12 @@ const priceMap = {
     Farmer: 'farmerPrice',
 };
 
-// Maps role to their "cost"
-const costMap = {
-    Franchise: 0, // Franchise's cost is 0 (vs. Admin)
-    Distributor: 'franchisePrice',
-    SubDistributor: 'distributorPrice',
-    Dealer: 'subDistributorPrice',
-};
-
 export async function POST(request, { params }) {
   try {
     const loggedInUser = await getLoggedInUser();
-    if (!loggedInUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    
+    if (!loggedInUser || loggedInUser.role !== 'Admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
     const { transactionId } = params;
@@ -75,14 +69,8 @@ export async function POST(request, { params }) {
     if (!transactionToVerify) {
       return NextResponse.json({ error: 'Transaction not found.' }, { status: 404 });
     }
-
-    // Security Check: Only the buyer can pay
-    if (transactionToVerify.buyerId !== loggedInUser.id) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     if (transactionToVerify.paymentStatus === 'PAID') {
-      return NextResponse.json({ error: 'This transaction has already been paid.' }, { status: 400 });
+      return NextResponse.json({ error: 'This transaction has already been verified.' }, { status: 400 });
     }
 
     // --- Start Atomic Transaction ---
@@ -99,13 +87,22 @@ export async function POST(request, { params }) {
 
         const { buyer, product, quantity } = updatedTransaction;
 
-        // 2. Get the buyer's price
+        // 2. Define the price for each role
+        const priceMap = {
+            Franchise: product.franchisePrice,
+            Distributor: product.distributorPrice,
+            SubDistributor: product.subDistributorPrice,
+            Dealer: product.dealerPrice,
+            Farmer: product.farmerPrice,
+        };
+
+        // 3. Get the buyer's price
         const buyerPaidPrice = priceMap[buyer.role];
 
-        // 3. Get the upline chain
+        // 4. Get the upline chain
         const uplineChain = await getUplineChain(tx, buyer.id);
 
-        // 4. Calculate commissions
+        // 5. Calculate commissions
         let commissionData = [];
         let previousPrice = buyerPaidPrice; // Start with what the buyer paid
 
@@ -122,13 +119,14 @@ export async function POST(request, { params }) {
                     amount: finalCommissionAmount,
                     userId: uplineMember.id,
                     transactionId: transactionId,
-                    status: 'PENDING',
+                    status: CommissionStatus.PENDING, // <-- 2. USE THE ENUM
                 });
             }
+            // Update previousPrice for the next loop
             previousPrice = uplineMemberPrice;
         }
         
-        // 5. Create all commission records
+        // 6. Create all commission records
         if (commissionData.length > 0) {
             await tx.commission.createMany({
                 data: commissionData,
@@ -138,10 +136,10 @@ export async function POST(request, { params }) {
         return updatedTransaction;
     });
 
-    return NextResponse.json({ message: 'Payment successful and commissions created!', transaction: result });
+    return NextResponse.json({ message: 'Payment verified and commissions created!', transaction: result });
 
   } catch (error) {
-    console.error("Failed to process payment:", error);
-    return NextResponse.json({ error: error.message || 'Failed to process payment.' }, { status: 500 });
+    console.error("Failed to verify payment:", error);
+    return NextResponse.json({ error: error.message || 'Failed to verify payment.' }, { status: 500 });
   }
 }

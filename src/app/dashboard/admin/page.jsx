@@ -10,6 +10,7 @@ import HierarchyView from '../../../components/admin/HierarchyView';
 import AddNewUser from '../../../components/admin/AddNewUser';
 import Analytics from '../../../components/admin/Analytics'; 
 import PayoutsView from '../../../components/admin/PayoutsView';
+// REMOVED: import CommissionPayoutsView from '../../../components/admin/CommissionPayoutsView';
 
 const TABS = {
   REPORTS: 'Reports',
@@ -43,7 +44,13 @@ export default function AdminDashboard() {
       case TABS.ANALYTICS: return <Analytics />; 
       case TABS.HIERARCHY: return <HierarchyView />;
       case TABS.ADD_USER: return <AddNewUser />;
-      case TABS.PAYOUTS: return <PayoutsView />;
+      
+      // --- UPDATED THIS SECTION ---
+      // PayoutsView is now the single component that contains the tabs
+      case TABS.PAYOUTS: 
+        return <PayoutsView />;
+      // --- END OF UPDATE ---
+      
       default: return <Reports />;
     }
   };
@@ -109,4 +116,3 @@ export default function AdminDashboard() {
     </>
   );
 }
-
