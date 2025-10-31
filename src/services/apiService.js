@@ -130,7 +130,6 @@ export const getUserDetails = (userId) => {
   }).then(handleResponse);
 };
 
-// --- NEW FUNCTION TO GRANT MEMBERSHIP (ADMIN ONLY) ---
 export const grantMembership = (userId) => {
   return fetch(`/api/users/${userId}/grant-membership`, {
     method: 'POST',
@@ -155,6 +154,7 @@ export const getSales = () => {
   }).then(handleResponse);
 };
 
+// This is the (old) farmer-buying-from-dealer purchase
 export const createPurchase = (purchaseData) => {
   return fetch('/api/transactions/purchase', {
     method: 'POST',
@@ -164,31 +164,12 @@ export const createPurchase = (purchaseData) => {
   }).then(handleResponse);
 };
 
+// This is the NEW "Buy from Admin" purchase
 export const createDirectPurchase = (purchaseData) => {
   return fetch('/api/transactions/buy-from-admin', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(purchaseData),
-    credentials: 'include'
-  }).then(handleResponse);
-};
-
-// --- Payouts (Profit from Admin) ---
-export const getPendingPayouts = () => {
-  return fetch(`/api/payouts/pending`).then(handleResponse);
-};
-
-export const createPayout = (payoutData) => {
-  return fetch(`/api/payouts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payoutData),
-    credentials: 'include'
-  }).then(handleResponse);
-};
-
-export const getPendingPayoutForUser = (userId) => {
-  return fetch(`/api/payouts/user/${userId}`, {
     credentials: 'include'
   }).then(handleResponse);
 };
@@ -294,6 +275,13 @@ export const getMyPendingCommissions = () => {
     }).then(handleResponse);
 };
 
+// --- THIS IS THE MISSING FUNCTION ---
+export const payTransaction = (transactionId) => {
+  return fetch(`/api/transactions/${transactionId}/pay`, {
+      method: 'POST',
+      credentials: 'include'
+  }).then(handleResponse);
+};
 
 // --- ANALYTICS ---
 export const getAdminAnalytics = () => {
